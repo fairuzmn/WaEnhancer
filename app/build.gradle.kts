@@ -39,12 +39,18 @@ android {
         }
     }
 
+    sourceSets {
+        getByName("main") {
+            aidl.srcDirs("src/main/aidl")
+        }
+    }
+
     defaultConfig {
         applicationId = "com.wmods.wppenhacer"
         minSdk = 28
         targetSdk = 34
-        versionCode = 150
-        versionName = "1.5.0-DEV ($gitHash)"
+        versionCode = 151
+        versionName = "1.5.1-DEV ($gitHash - VoidCraft Fork)"
         multiDexEnabled = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
