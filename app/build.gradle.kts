@@ -50,7 +50,7 @@ android {
         minSdk = 28
         targetSdk = 34
         versionCode = 151
-        versionName = "1.5.1-DEV ($gitHash - VoidCraft Fork)"
+        versionName = "1.5.1-DEV (VoidCraft Fork)"
         multiDexEnabled = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
