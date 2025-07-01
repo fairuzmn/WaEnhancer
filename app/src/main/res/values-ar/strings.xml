@@ -407,4 +407,11 @@
     <string name="select_contacts">حدد جهة الاتصال</string>
     <string name="style_of_stories_status">نمط القصص/الحالة</string>
     <string name="style_of_stories_status_sum">تغيير نمط القصص/الحالات لبعض النماذج المتوفرة على واتساب</string>
+    <string name="view_seen_tick">عرض علامة المشاهدة</string>
+    <string name="view_seen_tick_sum">عرض أيقونة إذا تم إرسال عرض الرسالة إلى المستلم أو تم مشاهدة العرض الفريد</string>
+    <string name="text_color">لون النص</string>
+    <string name="disable_the_proximity_sensor">تعطيل إيقاف الشاشة عند مستشعر القرب</string>
+    <string name="disable_the_proximity_sensor_sum">تعطيل إيقاف الشاشة عند مستشعر القرب في واتساب بالكامل</string>
+    <string name="disable_status_in_the_profile_photo">تعطيل الحالة في صورة الملف الشخصي</string>
+    <string name="disable_status_in_the_profile_photo_sum">تعطيل الدائرة التي تظهر في صورة الملف الشخصي لكل جهة اتصال عند وجود حالة جديدة</string>
 </resources>

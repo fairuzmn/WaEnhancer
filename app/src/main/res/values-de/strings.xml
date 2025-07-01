@@ -406,4 +406,11 @@
     <string name="select_contacts">Kontakte auswählen</string>
     <string name="style_of_stories_status">Stil der/des Geschichten/Status</string>
     <string name="style_of_stories_status_sum">Ändert die/den Stories/Status-Stil von einigen Modellen auf WhatsApp</string>
+    <string name="view_seen_tick">Gesehen-Häkchen anzeigen</string>
+    <string name="view_seen_tick_sum">Ein Symbol anzeigen, wenn die Nachrichtenanzeige an den Empfänger gesendet oder eine eindeutige Anzeige gesehen wurde</string>
+    <string name="text_color">Textfarbe</string>
+    <string name="disable_the_proximity_sensor">Bildschirmabschaltung durch Näherungssensor deaktivieren</string>
+    <string name="disable_the_proximity_sensor_sum">Deaktiviert die Bildschirmabschaltung durch den Näherungssensor für ganz WhatsApp</string>
+    <string name="disable_status_in_the_profile_photo">Status im Profilbild deaktivieren</string>
+    <string name="disable_status_in_the_profile_photo_sum">Deaktiviert den Kreis, der im Profilbild jedes Kontakts erscheint, wenn ein neuer Status vorhanden ist</string>
 </resources>

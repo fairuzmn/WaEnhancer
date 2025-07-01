@@ -408,4 +408,11 @@
     <string name="select_contacts">בחר אנשי קשר</string>
     <string name="style_of_stories_status">סגנון עיצוב הסטטוס</string>
     <string name="style_of_stories_status_sum">משנה את סגנון הסטטוס לכמה דגמים שזמינים בווצאפ</string>
+    <string name="view_seen_tick">הצג סימון נצפה</string>
+    <string name="view_seen_tick_sum">הצג סמל אם ההודעה נצפתה על ידי הנמען או צפייה ייחודית נראתה</string>
+    <string name="text_color">צבע טקסט</string>
+    <string name="disable_the_proximity_sensor">בטל כיבוי מסך על ידי חיישן קירבה</string>
+    <string name="disable_the_proximity_sensor_sum">מבטל את כיבוי המסך על ידי חיישן הקירבה בכל WhatsApp</string>
+    <string name="disable_status_in_the_profile_photo">בטל סטטוס בתמונת הפרופיל</string>
+    <string name="disable_status_in_the_profile_photo_sum">מבטל את המעגל שמופיע בתמונת הפרופיל של כל איש קשר כאשר יש סטטוס חדש</string>
 </resources>

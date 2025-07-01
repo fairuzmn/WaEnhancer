@@ -406,4 +406,11 @@
     <string name="select_contacts">Seleccionar Contactos</string>
     <string name="style_of_stories_status">Estilo de las Historias/Estados</string>
     <string name="style_of_stories_status_sum">Cambia el estilo de las Historias/Estados a algunos otros modelos disponibles en WhatsApp</string>
+    <string name="view_seen_tick">Mostrar marca de visto</string>
+    <string name="view_seen_tick_sum">Mostrar un ícono si el mensaje fue visto por el destinatario o se detectó una vista única</string>
+    <string name="text_color">Color del texto</string>
+    <string name="disable_the_proximity_sensor">Desactivar apagado de pantalla con sensor de proximidad</string>
+    <string name="disable_the_proximity_sensor_sum">Desactiva el apagado de pantalla por sensor de proximidad en todo WhatsApp</string>
+    <string name="disable_status_in_the_profile_photo">Desactivar estado en la foto de perfil</string>
+    <string name="disable_status_in_the_profile_photo_sum">Desactiva el círculo que aparece en la foto de perfil cuando hay un nuevo estado</string>
 </resources>

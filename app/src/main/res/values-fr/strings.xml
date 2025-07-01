@@ -406,4 +406,11 @@
     <string name="select_contacts">Select Contacts</string>
     <string name="style_of_stories_status">Style of Stories/Status</string>
     <string name="style_of_stories_status_sum">Changes Stories/Status style to some models available on WhatsApp</string>
+    <string name="view_seen_tick">Afficher la coche vue</string>
+    <string name="view_seen_tick_sum">Afficher une icône si le message a été vu par le destinataire ou une vue unique a été détectée</string>
+    <string name="text_color">Couleur du texte</string>
+    <string name="disable_the_proximity_sensor">Désactiver l’extinction de l’écran par le capteur de proximité</string>
+    <string name="disable_the_proximity_sensor_sum">Désactive l’extinction de l’écran via le capteur de proximité sur tout WhatsApp</string>
+    <string name="disable_status_in_the_profile_photo">Désactiver le statut dans la photo de profil</string>
+    <string name="disable_status_in_the_profile_photo_sum">Désactive le cercle qui apparaît sur la photo de profil lorsqu’un nouveau statut est disponible</string>
 </resources>

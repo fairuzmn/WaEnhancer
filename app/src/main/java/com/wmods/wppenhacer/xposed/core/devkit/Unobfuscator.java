@@ -914,12 +914,12 @@ public class Unobfuscator {
                 var superMethodInterfaces = method.getDeclaredClass().getInterfaces();
                 if (superMethodInterfaces.isEmpty())
                     throw new Exception("SendPresence method interface list empty");
-                var superMethod = superMethodInterfaces.get(0).findMethod(FindMethod.create().matcher(MethodMatcher.create().name(method.getName()))).firstOrNull();
+                var superMethod = superMethodInterfaces.get(0).findMethod(FindMethod.create().matcher(MethodMatcher.create().name(method.getName()))).singleOrNull();
                 if (superMethod == null)
                     throw new Exception("SendPresence method interface method not found");
                 methodCallers = superMethod.getCallers();
             }
-            var newMethod = methodCallers.firstOrNull(method1 -> method1.getParamCount() == 4);
+            var newMethod = methodCallers.singleOrNull(method1 -> method1.getParamCount() == 4);
             if (newMethod == null) throw new Exception("SendPresence method not found 2");
             return newMethod.getMethodInstance(loader);
         });

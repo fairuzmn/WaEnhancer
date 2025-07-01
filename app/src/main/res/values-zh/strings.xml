@@ -406,4 +406,11 @@
     <string name="select_contacts">Select Contacts</string>
     <string name="style_of_stories_status">Style of Stories/Status</string>
     <string name="style_of_stories_status_sum">Changes Stories/Status style to some models available on WhatsApp</string>
+    <string name="view_seen_tick">显示已查看标记</string>
+    <string name="view_seen_tick_sum">如果消息已被接收者查看或唯一浏览被记录，则显示图标</string>
+    <string name="text_color">文字颜色</string>
+    <string name="disable_the_proximity_sensor">禁用接近传感器时关闭屏幕</string>
+    <string name="disable_the_proximity_sensor_sum">禁用整个 WhatsApp 中接近传感器关闭屏幕的功能</string>
+    <string name="disable_status_in_the_profile_photo">禁用头像中的状态</string>
+    <string name="disable_status_in_the_profile_photo_sum">禁用当有新状态时在每个联系人头像上出现的圆圈</string>
 </resources>
