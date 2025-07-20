@@ -39,7 +39,7 @@ android {
         }
         create("whatsappPrivate") {
             dimension = "version"
-            applicationIdSuffix = ".private"
+            applicationIdSuffix = ""
             resValue("string", "app_name", "Wa Enhancer - VoidCraft")
             versionNameSuffix = " - VoidCraft"
         }
