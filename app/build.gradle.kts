@@ -37,6 +37,12 @@ android {
             applicationIdSuffix = ".w4b"
             resValue("string", "app_name", "Wa Enhancer Business")
         }
+        create("whatsappPrivate") {
+            dimension = "version"
+            applicationIdSuffix = ".private"
+            resValue("string", "app_name", "Wa Enhancer - VoidCraft")
+            versionNameSuffix = " - VoidCraft"
+        }
     }
 
     defaultConfig {
@@ -169,7 +175,11 @@ configurations.all {
 }
 
 afterEvaluate {
-    listOf("installWhatsappDebug", "installBusinessDebug").forEach { taskName ->
+    listOf(
+        "installWhatsappDebug",
+        "installBusinessDebug",
+        "whatsappPrivateDebug"
+    ).forEach { taskName ->
         tasks.findByName(taskName)?.doLast {
             runCatching {
                 runBlocking {
