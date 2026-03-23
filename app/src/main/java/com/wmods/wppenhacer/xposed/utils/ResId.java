@@ -20,6 +20,7 @@ public class ResId {
         public static int camera;
         public static int edit2;
         public static int ic_privacy;
+        public static int user_foreground;
     }
 
     public static class string {
@@ -103,6 +104,15 @@ public class ResId {
         public static int download_folder_permission;
         public static int no_contact_with_custom_privacy;
         public static int select_contacts;
+        public static int download_not_available;
+        public static int block_not_detected;
+        public static int possible_block_detected;
+        public static int checking_if_the_contact_is_blocked;
+        public static int block_unverified;
+        public static int warning_restore;
+        public static int force_restore_backup_experimental;
+        public static int force_restore_backup;
+        public static int contact_probably_not_added;
     }
 
     public static class array {

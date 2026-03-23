@@ -1,5 +1,6 @@
 package com.wmods.wppenhacer.xposed.core.components;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
@@ -90,7 +91,7 @@ public class AlertDialogWpp {
         return this;
     }
 
-    public AlertDialogWpp setMessage(String message) {
+    public AlertDialogWpp setMessage(CharSequence message) {
         if (isSystemDialog()) {
             mAlertDialog.setMessage(message);
             return this;
@@ -178,6 +179,12 @@ public class AlertDialogWpp {
     }
 
     public void show() {
+        if (mContext instanceof Activity) {
+            Activity activity = (Activity) mContext;
+            if (activity.isFinishing() || activity.isDestroyed()) {
+                return;
+            }
+        }
         if (isSystemDialog()) {
             mAlertDialog.show();
             return;

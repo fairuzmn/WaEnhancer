@@ -38,7 +38,7 @@
     <string name="novaconfig">Новый стиль настроек</string>
     <string name="novaconfig_sum">Включите новый стиль настроек с фотографией профиля на домашней панели</string>
     <string name="novofiltro">Поиск функций</string>
-    <string name="novofiltro_sum">Выберите между иконкой поиска, панелью поиска или без поиска (включить функцию отключения Meta AI)</string>
+    <string name="novofiltro_sum">Choose between Search Icon, Search Bar, or No Search</string>
     <string name="menuwicon">Значки меню</string>
     <string name="menuwicon_sum">Добавьте значки в пункты меню приложения</string>
     <string name="freezelastseen">Заморозка времени последнего посещения</string>
@@ -283,7 +283,6 @@
     <string name="installation_desc">1. Убедитесь, что ваше устройство имеет root.\n2. Установите Xposed Framework на ваше устройство.\n3. Загрузите плагин Wa Enhancer в разделе Действия.\n4. Установите Wa Enhancer APK.\n5. Включите модуль Wa Enhancer в приложении Xposed Installer.</string>
     <string name="go_to_telegram">Перейти в Telegram</string>
     <string name="go_to_github">Перейти на GitHub</string>
-    <string name="donate">Пожертвовать</string>
     <string name="support">Поддержка</string>
     <string name="support_desc">Если у вас возникли какие-либо проблемы или у вас есть вопросы о Wa Enhancer, пожалуйста, посетите Telegram.</string>
     <string name="license">Лицензия</string>
@@ -370,10 +369,14 @@
     <string name="custom_privacy_sum">Включить/отключить конфиденциальность</string>
     <string name="custom_privacy_per_contact">Пользовательская конфиденциальность на контакт</string>
     <string name="custom_privacy_per_contact_sum">Активировать пользовательскую кнопку конфиденциальности на экране контактной информации</string>
+    <string name="transcription_provider">Transcription Provider</string>
+    <string name="transcription_provider_sum">Choose the AI service for audio transcription</string>
     <string name="assemblyai">Включить AssemblyAI</string>
     <string name="assemblyai_sum">Заменяет стандартную транскрипцию Whatsapp на AssemblyAI</string>
-    <string name="assemblyai_key">AssemblyAI кнопка</string>
-    <string name="assemblyai_key_sum">Ключ доступа к AssemblyAI API (войдите на сайт и создайте учётную запись, чтобы получить ваш ключ)</string>
+    <string name="assemblyai_key">AssemblyAI API Key</string>
+    <string name="assemblyai_key_sum">AssemblyAI API access key (Get it at assemblyai.com)</string>
+    <string name="groq_api_key">Groq API Key</string>
+    <string name="groq_api_key_sum">Groq API access key (Get it at console.groq.com)</string>
     <string name="google_translate">Включить перевод Google</string>
     <string name="google_translate_sum">Заменяет родной переводчик WhatsApp на Google Translate</string>
     <string name="show_contact_info">Показывать в контактах</string>
@@ -412,4 +415,17 @@
     <string name="disable_the_proximity_sensor_sum">Отключить экран на датчик приближения для всего WhatsApp</string>
     <string name="disable_status_in_the_profile_photo">Отключить статус на фото профиля</string>
     <string name="disable_status_in_the_profile_photo_sum">Отключает круг, который появляется в фото профиля каждого контакта, когда есть новый статус</string>
+    <string name="download_not_available">Download not available or media has not been fully downloaded</string>
+    <string name="possible_block_detected">Possible block detected</string>
+    <string name="block_not_detected">Block not detected</string>
+    <string name="checking_if_the_contact_is_blocked">Checking if the contact is blocked...</string>
+    <string name="show_contact_blocked">Show Contact Blocked in Conversation</string>
+    <string name="show_contact_blocked_sum">This option verifies whether the contact may have blocked you (note: false positives may occur).</string>
+    <string name="block_unverified">Block Unverified</string>
+    <string name="disable_whatsapp_expiration">Disable WhatsApp Expiration</string>
+    <string name="disable_whatsapp_expiration_sum">Deactivates the expired version of WhatsApp, (Note: Manual Disable to update WhatsApp on the Play Store or mark the Play Store on LSposed)</string>
+    <string name="disable_ads">Disable Ads</string>
+    <string name="disable_ads_sum">Blocks ads from appearing in WhatsApp</string>
+    <string name="lockedchats_enhancer">Enhanced Locked Chats</string>
+    <string name="lockedchats_enhancer_sum">Improve locked chats by hiding notifications and contacts from the contact list</string>
 </resources>

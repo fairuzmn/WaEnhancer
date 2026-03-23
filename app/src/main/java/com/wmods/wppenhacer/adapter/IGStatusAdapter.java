@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -24,6 +25,8 @@ import androidx.annotation.Nullable;
 
 import com.wmods.wppenhacer.views.dialog.TabDialogContent;
 import com.wmods.wppenhacer.xposed.core.WppCore;
+import com.wmods.wppenhacer.xposed.core.components.FMessageWpp;
+import com.wmods.wppenhacer.xposed.core.components.WaContactWpp;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache;
 import com.wmods.wppenhacer.xposed.utils.DesignUtils;
@@ -31,7 +34,10 @@ import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.ResId;
 import com.wmods.wppenhacer.xposed.utils.Utils;
 
+import org.luckypray.dexkit.query.enums.StringMatchType;
+
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.Objects;
 
 import de.robv.android.xposed.XposedBridge;
@@ -61,6 +67,9 @@ public class IGStatusAdapter extends ArrayAdapter {
             holder.setInfo("my_status");
             holder.addButton.setVisibility(View.VISIBLE);
         } else if (statusInfoClazz.isInstance(item)) {
+            if (item instanceof View v) {
+                v.setClickable(false);
+            }
             holder.setInfo(item);
             holder.addButton.setVisibility(View.GONE);
         }
@@ -113,7 +122,7 @@ public class IGStatusAdapter extends ArrayAdapter {
                             clazz = Unobfuscator.getClassByName("TextStatusComposerActivity", activity.getClassLoader());
                         } catch (Exception ignored) {
                             clazz = Unobfuscator.getClassByName("ConsolidatedStatusComposerActivity", getContext().getClassLoader());
-                            intent.putExtra("status_composer_mode",2);
+                            intent.putExtra("status_composer_mode", 2);
                         }
                         intent.setClassName(activity.getPackageName(), clazz.getName());
                         activity.startActivity(intent);
@@ -129,7 +138,7 @@ public class IGStatusAdapter extends ArrayAdapter {
             try {
                 var clazz = Unobfuscator.getClassByName("StatusPlaybackActivity", getContext().getClassLoader());
                 var intent = new Intent(WppCore.getCurrentActivity(), clazz);
-                intent.putExtra("jid", holder.jid);
+                intent.putExtra("jid", holder.userJid.getPhoneRawString());
                 WppCore.getCurrentActivity().startActivity(intent);
             } catch (Exception e) {
                 Utils.showToast(e.getMessage(), 1);
@@ -139,11 +148,11 @@ public class IGStatusAdapter extends ArrayAdapter {
         return convertView;
     }
 
-    public IGStatusAdapter(@NonNull Context context, @NonNull Class<?> statusInfoClazz) {
+    public IGStatusAdapter(@NonNull Context context, @NonNull Class<?> statusInfoClazz) throws Exception {
         super(context, 0);
-        this.clazzImageStatus = XposedHelpers.findClass("com.whatsapp.status.ContactStatusThumbnail", this.getContext().getClassLoader());
+        this.clazzImageStatus = Unobfuscator.findFirstClassUsingName(this.getContext().getClassLoader(), StringMatchType.EndsWith, ".ContactStatusThumbnail");
         this.statusInfoClazz = statusInfoClazz;
-        this.setCountStatus = ReflectionUtils.findMethodUsingFilter(this.clazzImageStatus, m -> m.getParameterCount() == 2 && m.getParameterTypes()[0].equals(int.class) && m.getParameterTypes()[1].equals(int.class));
+        this.setCountStatus = ReflectionUtils.findMethodUsingFilter(this.clazzImageStatus, m -> m.getParameterCount() == 3 && Arrays.equals(new Class[]{int.class, int.class, int.class}, m.getParameterTypes()));
     }
 
     @Override
@@ -156,35 +165,44 @@ public class IGStatusAdapter extends ArrayAdapter {
         public RelativeLayout addButton;
         public TextView igStatusContactName;
         public boolean myStatus;
-        private String jid;
+        private FMessageWpp.UserJid userJid;
 
         public void setInfo(Object item) {
 
             if (Objects.equals(item, "my_status")) {
                 myStatus = true;
                 igStatusContactName.setText(UnobfuscatorCache.getInstance().getString("mystatus"));
-                igStatusContactPhoto.setImageDrawable(WppCore.getMyPhoto());
+                var profile = WppCore.getMyPhoto();
+                if (profile == null)
+                    profile = Utils.getApplication().getDrawable(ResId.drawable.user_foreground);
+                igStatusContactPhoto.setImageDrawable(profile);
                 setCountStatus(0, 0);
                 return;
             }
-            var statusInfo = XposedHelpers.getObjectField(item, "A01");
-            var field = ReflectionUtils.getFieldByExtendType(statusInfo.getClass(), XposedHelpers.findClass("com.whatsapp.jid.Jid", statusInfoClazz.getClassLoader()));
-            var userJid = ReflectionUtils.getObjectField(field, statusInfo);
-            var contactName = WppCore.getContactName(userJid);
-            jid = WppCore.getRawString(userJid);
-            igStatusContactName.setText(contactName);
-            var profile = WppCore.getContactPhotoDrawable(jid);
-            if (profile == null) profile = DesignUtils.getDrawableByName("avatar_contact");
-            igStatusContactPhoto.setImageDrawable(profile);
-            var countUnseen = XposedHelpers.getIntField(statusInfo, "A01");
-            var total = XposedHelpers.getIntField(statusInfo, "A00");
-            setCountStatus(countUnseen, total);
+            try {
+                var statusInfo = XposedHelpers.getObjectField(item, "A01");
+                var classJid = Unobfuscator.findFirstClassUsingName(statusInfoClazz.getClassLoader(), StringMatchType.EndsWith, "jid.Jid");
+                var field = ReflectionUtils.getFieldByExtendType(statusInfo.getClass(), classJid);
+                this.userJid = new FMessageWpp.UserJid(ReflectionUtils.getObjectField(field, statusInfo));
+                var waContact = WaContactWpp.getWaContactFromJid(this.userJid);
+                var contactName = waContact.getDisplayName();
+                igStatusContactName.setText(contactName);
+                var profile = BitmapDrawable.createFromPath(waContact.getProfilePhoto().getAbsolutePath());
+                if (profile == null)
+                    profile = Utils.getApplication().getDrawable(ResId.drawable.user_foreground);
+                igStatusContactPhoto.setImageDrawable(profile);
+                var countUnseen = XposedHelpers.getIntField(statusInfo, "A01");
+                var total = XposedHelpers.getIntField(statusInfo, "A00");
+                setCountStatus(countUnseen, total);
+            } catch (Exception e) {
+                XposedBridge.log(e);
+            }
         }
 
         public void setCountStatus(int countUnseen, int total) {
             if (setCountStatus != null) {
                 try {
-                    setCountStatus.invoke(igStatusContactPhoto, countUnseen, total);
+                    setCountStatus.invoke(igStatusContactPhoto, total, countUnseen, total);
                 } catch (Exception e) {
                     XposedBridge.log(e);
                 }

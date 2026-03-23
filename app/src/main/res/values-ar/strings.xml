@@ -8,22 +8,21 @@
     <string name="ghostmode_r">إخفاء تسجيل الصوت</string>
     <string name="ghostmode_sum_r">المستخدمون لا يستطيعون رؤية أنك تسجّل صوتًا</string>
     <string name="hidetag">إخفاء علامة \"تم إعادة التوجيه\"</string>
-    <string name="hidetag_sum">عندما يكون نشطًا، فإنه يسمح لك بإعادة توجيه الرسائل دون علامة إعادة التوجيه\"</string>
+    <string name="hidetag_sum">عندما يكون نشطًا، فإنه يسمح لك بإعادة توجيه الرسائل دون علامة إعادة التوجيه</string>
     <string name="hidestatusview">إخفاء عرض الحالات</string>
     <string name="hidestatusview_sum">عرض الحالات دون معرفة المستخدمين</string>
     <string name="hideread">إخفاء العلامات الزرقاء</string>
     <string name="hideread_sum">عندما يكون نشطًا، فإنه يسمح لك بقراءة الرسائل دون أن يعلم الشخص أنك قرأتها</string>
     <string name="perso">التخصيص </string>
-    <string name="segundosnahora">عرض الثواني في الوقت المناسب</string>
-    <string name="segundosnahora_sum">إظهار الثواني بجانب الوقت في تطبيق واتساب</string>
+    <string name="segundosnahora">عرض الثواني في وقت إرسال الرسائل</string>
+    <string name="segundosnahora_sum">إظهار الثواني بجانب الوقت الرسائل في تطبيق واتساب</string>
     <string name="textonahora">النص بجانب الوقت</string>
     <string name="viewonce">عرض غير محدود مرة واحدة</string>
     <string name="viewonce_sum">يسمح لك بفتح عرض مرة واحدة للوسائط عدة مرات</string>
     <string name="antirevokestatus">منع حذف الحالات</string>
     <string name="antirevokestatus_sum">عرض الحالات المحذوفة</string>
     <string name="hidereceipt">إخفاء تم التسليم</string>
-    <string name="hidereceipt_sum">المستخدمون لن يعلموا أن رسائلهم قد وصلت إليك
-(تحذير: قد يتسبب في تأخير استلام الرسائل)</string>
+    <string name="hidereceipt_sum">المستخدمون لن يعلموا أن رسائلهم قد وصلت إليك\n(تحذير: قد يتسبب في تأخير استلام الرسائل)</string>
     <string name="ampm">الوقت بتنسيق 12 ساعة</string>
     <string name="statusdowload">تنزيل ومشاركة الحالة</string>
     <string name="statusdowload_sum">يعرض خيارين للمشاركة و حالة التحميل</string>
@@ -39,9 +38,7 @@
     <string name="novaconfig">نمط الإعدادات الجديدة</string>
     <string name="novaconfig_sum">تمكين نمط الإعدادات الجديدة، مع صورة الملف الشخصي على شريط أدوات الشاشة الرئيسية</string>
     <string name="novofiltro">وظائف البحث</string>
-    <string name="novofiltro_sum">اختر بين أيقونة البحث، أو شريط البحث، أو عدم البحث
-
-(تمكين وظيفة لتعطيل ميتا AI)</string>
+    <string name="novofiltro_sum">اختر بين أيقونة البحث، شريط البحث، أو عدم البحث</string>
     <string name="menuwicon">أيقونات القائمة</string>
     <string name="menuwicon_sum">إضافة أيقونات بجوار خيارات القائمة عبر التطبيق</string>
     <string name="freezelastseen">تجميد آخر ظهور</string>
@@ -286,7 +283,6 @@
     <string name="installation_desc">1. تأكد من أن جهازك متجذر.\n2. قم بتثبيت إطار عمل Xposed Framework على جهازك.\n3. قم بتنزيل Wa Enhancer من قسم الإجراءات.\n4. قم بتثبيت ملف Wa Enhancer APK.\n5. قم بتمكين وحدة Wa Enhancer في تطبيق Xposed Installe.</string>
     <string name="go_to_telegram">الذهاب إلى تيليجرام</string>
     <string name="go_to_github">الذهاب إلى GitHub</string>
-    <string name="donate">تبرّع</string>
     <string name="support">الدعم</string>
     <string name="support_desc">إذا واجهت أي مشكلات أو لديك أسئلة حول Wa Enhancer، يرجى زيارة Telegram.</string>
     <string name="license">التَرْخِيصْ</string>
@@ -373,10 +369,14 @@
     <string name="custom_privacy_sum">تمكين/تعطيل الخصوصية المخصصة</string>
     <string name="custom_privacy_per_contact">خصوصية مخصصة لكل جهة اتصال</string>
     <string name="custom_privacy_per_contact_sum">قم بتنشيط الخصوصية المخصص على شاشة معلومات الاتصال</string>
+    <string name="transcription_provider">مزود خدمات النسخ</string>
+    <string name="transcription_provider_sum">اختر خدمة الذكاء الاصطناعي للنسخ الصوتي</string>
     <string name="assemblyai">تمكين(AssemblyAI)</string>
     <string name="assemblyai_sum">استبدال النسخ الافتراضي لـ WhatsApp بـ AssemblyAI</string>
-    <string name="assemblyai_key">مفتاح AssemblyAI</string>
-    <string name="assemblyai_key_sum">مفتاح الوصول API AssemblyAI (تسجيل الدخول إلى الموقع وإنشاء حساب للحصول على المفتاح الخاص بك)</string>
+    <string name="assemblyai_key">مفتاح واجهة برمجة تطبيقات AssemblyAI</string>
+    <string name="assemblyai_key_sum">مفتاح الوصول إلى واجهة برمجة تطبيقات AssemblyAI (احصل عليه من assemblyai.com)</string>
+    <string name="groq_api_key">مفتاح واجهة برمجة تطبيقات Groq</string>
+    <string name="groq_api_key_sum">مفتاح الوصول إلى واجهة برمجة تطبيقات Groq (احصل عليه من console.groq.com)</string>
     <string name="google_translate">تمكين ترجمة جوجل</string>
     <string name="google_translate_sum">يستبدل مترجم واتساب الأصلي بترجمة جوجل</string>
     <string name="show_contact_info">إظهار في معلومات جهة الاتصال</string>
@@ -415,4 +415,17 @@
     <string name="disable_the_proximity_sensor_sum">تعطيل إيقاف تشغيل الشاشة على مستشعر القرب لتطبيق واتساب بالكامل</string>
     <string name="disable_status_in_the_profile_photo">تعطيل الحالة في صورة الملف الشخصي</string>
     <string name="disable_status_in_the_profile_photo_sum">يعطل الدائرة التي تظهر في صورة الملف الشخصي لكل جهة اتصال عند وجود حالة جديدة</string>
+    <string name="download_not_available">التنزيل غير متوفر أو لم يتم تحميل الوسائط بالكامل</string>
+    <string name="possible_block_detected">تم اكتشاف كتلة محتملة</string>
+    <string name="block_not_detected">لم يتم اكتشاف حظر</string>
+    <string name="checking_if_the_contact_is_blocked">جارٍ التحقق مما إذا كان جهة الاتصال محظورة...</string>
+    <string name="show_contact_blocked">إظهار جهة الاتصال المحظورة في المحادثة</string>
+    <string name="show_contact_blocked_sum">يتحقق هذا الخِيار مما إذا كان جهة الاتصال قد حظرتك (ملاحظة: قد تحدث نتائج إيجابية خاطئة).</string>
+    <string name="block_unverified">حظر غير مُتحقق منه</string>
+    <string name="disable_whatsapp_expiration">تعطيل انتهاء صلاحية واتساب</string>
+    <string name="disable_whatsapp_expiration_sum">يعطل الإصدار المنتهي الصَّلاحِيَة من WhatsApp (ملاحظة: التعطيل يدويًا لتحديث WhatsApp على متجر Play Store أو ضع علامة على متجر Play Store على LSposed)</string>
+    <string name="disable_ads">تعطيل الإعلانات</string>
+    <string name="disable_ads_sum">منع الإعلانات من الظهور في WhatsApp</string>
+    <string name="lockedchats_enhancer">محادثات مقفلة محسّنة</string>
+    <string name="lockedchats_enhancer_sum">حسّن المحادثات المقفلة عن طريق إخفاء الإشعارات وجهات الاتصال من قائمة جهات الاتصال</string>
 </resources>

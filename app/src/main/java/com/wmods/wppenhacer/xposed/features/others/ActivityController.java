@@ -15,9 +15,12 @@ import androidx.annotation.NonNull;
 import com.wmods.wppenhacer.preference.ContactPickerPreference;
 import com.wmods.wppenhacer.xposed.core.Feature;
 import com.wmods.wppenhacer.xposed.core.WppCore;
+import com.wmods.wppenhacer.xposed.core.components.FMessageWpp;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.ResId;
+
+import org.luckypray.dexkit.query.enums.StringMatchType;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -30,7 +33,6 @@ import de.robv.android.xposed.XposedHelpers;
 
 public class ActivityController extends Feature {
 
-    public static final String EXPORTED_ACTIVITY = WppCore.getSettingsNotificationsActivityClass(ClassLoader.getSystemClassLoader()).getName();
     private static String Key;
 
     public ActivityController(@NonNull ClassLoader classLoader, @NonNull XSharedPreferences preferences) {
@@ -40,7 +42,7 @@ public class ActivityController extends Feature {
     @Override
     public void doHook() throws Throwable {
 
-        var clazz = XposedHelpers.findClass(EXPORTED_ACTIVITY, classLoader);
+        var clazz = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith,".SettingsNotifications");
         Class<?> statusDistribution = Unobfuscator.loadStatusDistributionClass(classLoader);
 
         XposedHelpers.findAndHookMethod(Activity.class, "onCreate", Bundle.class, new XC_MethodHook() {
@@ -85,7 +87,7 @@ public class ActivityController extends Feature {
                     Intent intent2 = new Intent();
                     intent2.putExtra("path", uriStr);
                     intent2.putExtra("key", Key);
-                    logDebug("onActivityResult","Call Download Result");
+                    logDebug("onActivityResult", "Call Download Result");
                     activity.setResult(Activity.RESULT_OK, intent2);
                 }
                 activity.finish();
@@ -99,14 +101,14 @@ public class ActivityController extends Feature {
         var listContactsField = ReflectionUtils.findFieldUsingFilter(instance.getClass(), field -> field.getType() == List.class);
         var listContacts = (List) ReflectionUtils.getObjectField(listContactsField, instance);
         var contacts = new ArrayList<String>();
-        for (Object contact : listContacts) {
-            var rawContacts = WppCore.getRawString(contact);
+        for (Object contactUserJid : listContacts) {
+            var rawContacts = new FMessageWpp.UserJid(contactUserJid).getPhoneRawString();
             contacts.add(rawContacts);
         }
         Intent intent2 = new Intent();
         intent2.putStringArrayListExtra("contacts", contacts);
         intent2.putExtra("key", Key);
-        activity.setResult( Activity.RESULT_OK, intent2);
+        activity.setResult(Activity.RESULT_OK, intent2);
     }
 
     private void downloadController(Activity activity, Intent intent2) {
@@ -135,9 +137,11 @@ public class ActivityController extends Feature {
         }
         Constructor constructor = ReflectionUtils.findConstructorUsingFilter(statusDistribution, constructor1 -> constructor1.getParameterCount() > 5);
         Object[] params = ReflectionUtils.initArray(constructor.getParameterTypes());
-        var lists = ReflectionUtils.findArrayOfType(constructor.getParameterTypes(), List.class);
+        var lists = ReflectionUtils.findClassesOfType(constructor.getParameterTypes(), List.class);
+        for (int i = 0; i < lists.size(); i++) {
+            params[lists.get(i).first] = new ArrayList<>();
+        }
         params[lists.get(0).first] = listContacts;
-        params[lists.get(1).first] = new ArrayList();
         Parcelable instance = (Parcelable) constructor.newInstance(params);
         intent2.putExtra("status_distribution", instance);
         activity.startActivityForResult(intent2, ContactPickerPreference.REQUEST_CONTACT_PICKER);

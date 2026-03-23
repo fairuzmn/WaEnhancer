@@ -29,7 +29,7 @@ public class DownloadViewOnce extends Feature {
         super(classLoader, preferences);
     }
 
-    private static void downloadFile(Object userJid, File file) throws Exception {
+    private static void downloadFile(FMessageWpp.UserJid userJid, File file) throws Exception {
         var dest = Utils.getDestination("View Once");
         var fileExtension = file.getAbsolutePath().substring(file.getAbsolutePath().lastIndexOf(".") + 1);
         var name = Utils.generateName(userJid, fileExtension);
@@ -73,6 +73,10 @@ public class DownloadViewOnce extends Feature {
                     item.setOnMenuItemClickListener(item1 -> {
                         try {
                             var file = fMessage.getMediaFile();
+                            if (file == null) {
+                                Utils.showToast(Utils.getApplication().getString(ResId.string.download_not_available), 1);
+                                return true;
+                            }
                             downloadFile(fMessage.getKey().remoteJid, file);
                         } catch (Exception e) {
                             Utils.showToast(e.getMessage(), Toast.LENGTH_LONG);
@@ -96,9 +100,12 @@ public class DownloadViewOnce extends Feature {
                                     var keyClass = FMessageWpp.Key.TYPE;
                                     var fieldType = ReflectionUtils.getFieldByType(param.thisObject.getClass(), keyClass);
                                     var keyMessageObj = ReflectionUtils.getObjectField(fieldType, param.thisObject);
-                                    var fmessageObj = WppCore.getFMessageFromKey(keyMessageObj);
-                                    var fmessage = new FMessageWpp(fmessageObj);
+                                    var fmessage = new FMessageWpp.Key(keyMessageObj).getFMessage();
                                     var file = fmessage.getMediaFile();
+                                    if (file == null) {
+                                        Utils.showToast(Utils.getApplication().getString(ResId.string.download_not_available), 1);
+                                        return;
+                                    }
                                     var userJid = fmessage.getKey().remoteJid;
                                     try {
                                         downloadFile(userJid, file);

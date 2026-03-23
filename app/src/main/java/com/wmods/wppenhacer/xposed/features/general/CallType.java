@@ -9,12 +9,14 @@ import android.os.BaseBundle;
 import androidx.annotation.NonNull;
 
 import com.wmods.wppenhacer.xposed.core.Feature;
-import com.wmods.wppenhacer.xposed.core.WppCore;
 import com.wmods.wppenhacer.xposed.core.components.AlertDialogWpp;
-import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
+import com.wmods.wppenhacer.xposed.core.components.FMessageWpp;
+import com.wmods.wppenhacer.xposed.core.components.SharedPreferencesWrapper;
 import com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.ResId;
+
+import java.util.Objects;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
@@ -34,14 +36,11 @@ public class CallType extends Feature {
 
         if (!prefs.getBoolean("calltype", false)) return;
 
-        var intPreferences = Unobfuscator.loadGetIntPreferences(classLoader);
-        XposedBridge.hookMethod(intPreferences, new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                if (param.args[1] == "call_confirmation_dialog_count") {
-                    param.setResult(1);
-                }
+        SharedPreferencesWrapper.addHook((key, value) -> {
+            if (Objects.equals(key, "call_confirmation_dialog_count")) {
+                return 1;
             }
+            return value;
         });
 
 
@@ -88,7 +87,8 @@ public class CallType extends Feature {
                         case 0:
                             var intent = new Intent();
                             intent.setAction(Intent.ACTION_DIAL);
-                            intent.setData(Uri.parse("tel:+" + WppCore.stripJID(jid)));
+                            var userJid = new FMessageWpp.UserJid(jid);
+                            intent.setData(Uri.parse("tel:+" + userJid.getPhoneNumber()));
                             context.startActivity(intent);
                             break;
                         case 1:

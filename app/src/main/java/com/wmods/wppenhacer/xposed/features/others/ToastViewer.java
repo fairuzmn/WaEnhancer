@@ -16,6 +16,10 @@ import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.ResId;
 import com.wmods.wppenhacer.xposed.utils.Utils;
 
+import org.luckypray.dexkit.query.enums.StringMatchType;
+
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -47,38 +51,53 @@ public class ToastViewer extends Feature {
         var toastViewedMessage = prefs.getBoolean("toast_viewed_message", false);
 
         var onInsertReceipt = Unobfuscator.loadOnInsertReceipt(classLoader);
+
         XposedBridge.hookMethod(onInsertReceipt, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                int type = ReflectionUtils.getArg(param.args, Integer.class, 0);
-                long id = ReflectionUtils.getArg(param.args, Long.class, 0);
-                if (type != 13) return;
-                var jidClass = classLoader.loadClass("com.whatsapp.jid.Jid");
-                var PhoneUserJid = ReflectionUtils.getArg(param.args, jidClass, 0);
-                AtomicReference<Object> fmessage = new AtomicReference<>();
-                try {
-                    fmessage.set(ReflectionUtils.getArg(param.args, FMessageWpp.TYPE, 0));
-                } catch (Exception ignored) {
-                }
-                CompletableFuture.runAsync(() -> {
-                    var raw = WppCore.getRawString(PhoneUserJid);
-                    var UserJid = WppCore.createUserJid(raw);
-                    var contactName = WppCore.getContactName(UserJid);
-                    var rowId = id;
-
-                    if (TextUtils.isEmpty(contactName)) contactName = WppCore.stripJID(raw);
-
-                    var sql = MessageStore.getInstance().getDatabase();
-
-                    if (fmessage.get() != null) {
-                        rowId = new FMessageWpp(fmessage.get()).getRowId();
-                    }
-
-                    checkDataBase(sql, rowId, contactName, raw, toastViewedMessage, toastViewedStatus);
-                });
+                processNewWA(param, toastViewedMessage, toastViewedStatus);
             }
         });
     }
+
+    private void processNewWA(XC_MethodHook.MethodHookParam param, boolean toastViewedMessage, boolean toastViewedStatus) throws Exception {
+        Collection collection;
+        if (!(param.args[0] instanceof Collection)) {
+            collection = Collections.singleton(param.args[0]);
+        } else {
+            collection = (Collection) param.args[0];
+        }
+        var jidClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "jid.Jid");
+        for (var messageStatusUpdateReceipt : collection) {
+            var fieldByType = ReflectionUtils.getFieldByType(messageStatusUpdateReceipt.getClass(), int.class);
+            var fieldId = ReflectionUtils.getFieldByType(messageStatusUpdateReceipt.getClass(), long.class);
+            var fieldByUserJid = ReflectionUtils.getFieldByExtendType(messageStatusUpdateReceipt.getClass(), jidClass);
+            var fieldMessage = ReflectionUtils.getFieldByExtendType(messageStatusUpdateReceipt.getClass(), FMessageWpp.TYPE);
+            int type = fieldByType.getInt(messageStatusUpdateReceipt);
+            long id = fieldId.getLong(messageStatusUpdateReceipt);
+            if (type != 13) return;
+            var userJid = new FMessageWpp.UserJid(fieldByUserJid.get(messageStatusUpdateReceipt));
+            AtomicReference<Object> fmessage = new AtomicReference<>();
+            try {
+                fmessage.set(fieldMessage.get(messageStatusUpdateReceipt));
+            } catch (Exception ignored) {
+            }
+            CompletableFuture.runAsync(() -> {
+                var contactName = WppCore.getContactName(userJid);
+                var rowId = id;
+
+                if (TextUtils.isEmpty(contactName)) contactName = userJid.getPhoneNumber();
+
+                var sql = MessageStore.getInstance().getDatabase();
+
+                if (fmessage.get() != null) {
+                    rowId = new FMessageWpp(fmessage.get()).getRowId();
+                }
+                checkDataBase(sql, rowId, contactName, userJid.getPhoneRawString(), toastViewedMessage, toastViewedStatus);
+            });
+        }
+    }
+
 
     @NonNull
     @Override
@@ -86,7 +105,7 @@ public class ToastViewer extends Feature {
         return "Toast Viewer";
     }
 
-    private synchronized void checkDataBase(SQLiteDatabase sql, long id, String contactName, String raw, boolean toastViewedMessage, boolean toast_viewed_status) {
+    private synchronized void checkDataBase(SQLiteDatabase sql, long id, String contactName, String rawJid, boolean toastViewedMessage, boolean toast_viewed_status) {
         try (var result2 = sql.query("message", null, "_id = ?", new String[]{String.valueOf(id)}, null, null, null)) {
             if (!result2.moveToNext()) return;
 
@@ -95,26 +114,31 @@ public class ToastViewer extends Feature {
                 if (toast_viewed_status) {
                     Utils.showToast(Utils.getApplication().getString(ResId.string.viewed_your_status, contactName), Toast.LENGTH_LONG);
                 }
-                Tasker.sendTaskerEvent(contactName, WppCore.stripJID(raw), "viewed_status");
+                Tasker.sendTaskerEvent(contactName, WppCore.stripJID(rawJid), "viewed_status");
                 return;
             }
 
-            if (Objects.equals(WppCore.getCurrentRawJID(), raw)) return;
+            var userJid = WppCore.getCurrentUserJid();
+
+            if (rawJid != null && userJid != null && Objects.equals(userJid.getPhoneRawString(), rawJid))
+                return;
 
             var chat_id = result2.getLong(result2.getColumnIndexOrThrow("chat_row_id"));
             try (var result3 = sql.query("chat", null, "_id = ? AND subject IS NULL", new String[]{String.valueOf(chat_id)}, null, null, null)) {
                 if (!result3.moveToNext()) return;
 
-                var key = raw + "_" + "viewed_message";
+                var key = rawJid + "_" + "viewed_message";
                 long currentTime = System.currentTimeMillis();
                 Long lastEventTime = lastEventTimeMap.get(key);
                 if (lastEventTime == null || (currentTime - lastEventTime) >= MIN_INTERVAL) {
                     lastEventTimeMap.put(key, currentTime);
+                    Tasker.sendTaskerEvent(contactName, WppCore.stripJID(rawJid), "viewed_message");
                     if (toastViewedMessage) {
                         Utils.showToast(Utils.getApplication().getString(ResId.string.viewed_your_message, contactName), Toast.LENGTH_LONG);
                     }
-                    Tasker.sendTaskerEvent(contactName, WppCore.stripJID(raw), "viewed_message");
                 }
+            } catch (Exception e) {
+                XposedBridge.log(e);
             }
         }
     }

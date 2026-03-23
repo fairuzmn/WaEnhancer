@@ -1,6 +1,8 @@
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import java.io.FileInputStream
 import java.util.Locale
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -22,7 +24,7 @@ val gitHash: String = getGitHashCommit().uppercase(Locale.getDefault())
 
 android {
     namespace = "com.wmods.wppenhacer"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = "27.0.11902837 rc2"
 
     flavorDimensions += "version"
@@ -49,19 +51,30 @@ android {
         applicationId = "com.wmods.wppenhacer"
         minSdk = 28
         targetSdk = 34
-        versionCode = 150
-        versionName = "1.5.0-DEV ($gitHash)"
+        versionCode = 153
+        versionName = "1.5.3-DEV ($gitHash)"
         multiDexEnabled = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         signingConfigs.create("config") {
+            val keystorePropertiesFile = rootProject.file("local.properties")
+            val keystoreProperties = Properties()
+            if (keystorePropertiesFile.exists()) {
+                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+            }
+
             val androidStoreFile = project.findProperty("androidStoreFile") as String?
+                ?: keystoreProperties.getProperty("androidStoreFile")
+
             if (!androidStoreFile.isNullOrEmpty()) {
                 storeFile = rootProject.file(androidStoreFile)
-                storePassword = project.property("androidStorePassword") as String
-                keyAlias = project.property("androidKeyAlias") as String
-                keyPassword = project.property("androidKeyPassword") as String
+                storePassword = project.findProperty("androidStorePassword") as String?
+                    ?: keystoreProperties.getProperty("androidStorePassword")
+                keyAlias = project.findProperty("androidKeyAlias") as String?
+                    ?: keystoreProperties.getProperty("androidKeyAlias")
+                keyPassword = project.findProperty("androidKeyPassword") as String?
+                    ?: keystoreProperties.getProperty("androidKeyPassword")
             }
         }
 
@@ -125,7 +138,13 @@ android {
     materialThemeBuilder {
         themes {
             for ((name, color) in listOf(
-                "Green" to "4FAF50"
+                "Green" to "4FAF50",
+                "Blue" to "3B82F6",
+                "Cyan" to "06B6D4",
+                "Purple" to "8B5CF6",
+                "Orange" to "F97316",
+                "Red" to "EF4444",
+                "Pink" to "EC4899"
             )) {
                 create("Material$name") {
                     lightThemeFormat = "ThemeOverlay.Light.%s"
@@ -143,10 +162,12 @@ android {
 
 dependencies {
     implementation(libs.colorpicker)
-    implementation(libs.dexkit)
+    implementation(files("libs/dexkit-android.aar"))
+    implementation(libs.flatbuffers)
     compileOnly(libs.libxposed.legacy)
 
     implementation(libs.androidx.activity)
+    implementation(libs.androidx.documentfile)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.fragment)
     implementation(libs.androidx.navigation.fragment)
@@ -165,6 +186,7 @@ dependencies {
     implementation(libs.arscblamer)
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
+    implementation(libs.markwon.core)
 }
 
 configurations.all {
@@ -174,6 +196,11 @@ configurations.all {
     exclude("org.jetbrains.kotlin", "kotlin-stdlib-jdk8")
 }
 
+interface InjectedExecOps {
+    @get:Inject val execOps: ExecOperations
+}
+
+
 afterEvaluate {
     listOf(
         "installWhatsappDebug",
@@ -182,8 +209,9 @@ afterEvaluate {
     ).forEach { taskName ->
         tasks.findByName(taskName)?.doLast {
             runCatching {
+                val injected  = project.objects.newInstance<InjectedExecOps>()
                 runBlocking {
-                    exec {
+                    injected.execOps.exec {
                         commandLine(
                             "adb",
                             "shell",
@@ -193,7 +221,7 @@ afterEvaluate {
                         )
                     }
                     delay(500)
-                    exec {
+                    injected.execOps.exec {
                         commandLine(
                             "adb",
                             "shell",

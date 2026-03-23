@@ -1,5 +1,9 @@
 package com.wmods.wppenhacer.xposed.features.privacy;
 
+import static com.wmods.wppenhacer.xposed.features.privacy.HideSeen.getKeyMessage;
+
+import android.util.Pair;
+
 import androidx.annotation.NonNull;
 
 import com.wmods.wppenhacer.xposed.core.Feature;
@@ -10,59 +14,145 @@ import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.features.customization.HideSeenView;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 
+import org.json.JSONObject;
+import org.luckypray.dexkit.query.enums.StringMatchType;
+
+import java.lang.reflect.Method;
+import java.util.List;
+
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
 import de.robv.android.xposed.XposedBridge;
 
 public class HideReceipt extends Feature {
+
+    private static final String RECEIPT_TYPE_SENDER = "sender";
+    private static final String RECEIPT_TYPE_INACTIVE = "inactive";
+
+    private boolean hideReceipt;
+    private boolean ghostMode;
+    private boolean hideRead;
+
     public HideReceipt(ClassLoader loader, XSharedPreferences preferences) {
         super(loader, preferences);
     }
 
     @Override
     public void doHook() throws Exception {
-        var hideReceipt = prefs.getBoolean("hidereceipt", false);
-        var ghostmode = WppCore.getPrivBoolean("ghostmode", false);
-        var hideread = prefs.getBoolean("hideread", false);
+        loadPreferences();
+        logPreferences();
+        hookReceiptMethod();
+    }
 
-        var method = Unobfuscator.loadReceiptMethod(classLoader);
-        logDebug("hook method:" + Unobfuscator.getMethodDescriptor(method));
-        var method2 = Unobfuscator.loadReceiptOutsideChat(classLoader);
-        logDebug("Outside Chat: " + Unobfuscator.getMethodDescriptor(method2));
-        var mInChat = Unobfuscator.loadReceiptInChat(classLoader);
-        logDebug("In Chat: " + Unobfuscator.getMethodDescriptor(mInChat));
+    private void loadPreferences() {
+        hideReceipt = prefs.getBoolean("hidereceipt", false);
+        ghostMode = WppCore.getPrivBoolean("ghostmode", false);
+        hideRead = prefs.getBoolean("hideread", false);
+    }
 
-        XposedBridge.hookMethod(method, new XC_MethodHook() {
+    private void logPreferences() {
+        logDebug("hideReceipt: " + hideReceipt + ", ghostmode: " + ghostMode + ", hideread: " + hideRead);
+    }
+
+    private void hookReceiptMethod() throws Exception {
+        Method receiptMethod = Unobfuscator.loadReceiptMethod(classLoader);
+        Method hideViewInChatMethod = Unobfuscator.loadHideViewInChatMethod(classLoader);
+        Method outsideMethod = Unobfuscator.loadReceiptOutsideChat(classLoader);
+
+        logDebug("hook method:" + Unobfuscator.getMethodDescriptor(receiptMethod));
+        logDebug("Inside Chat", Unobfuscator.getMethodDescriptor(hideViewInChatMethod));
+        logDebug("Outside Chat", Unobfuscator.getMethodDescriptor(outsideMethod));
+
+        XposedBridge.hookMethod(receiptMethod, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                if (!ReflectionUtils.isCalledFromMethod(method2) && !ReflectionUtils.isCalledFromMethod(mInChat))
-                    return;
-                var key = ReflectionUtils.getArg(param.args, FMessageWpp.Key.TYPE, 0);
-                var messageKey = new FMessageWpp.Key(key);
-                var userJid = messageKey.remoteJid;
-                var rawJid = WppCore.getRawString(userJid);
-                var number = WppCore.stripJID(rawJid);
-                var privacy = CustomPrivacy.getJSON(number);
-                var customHideReceipt = privacy.optBoolean("HideReceipt", hideReceipt);
-                var customHideRead = privacy.optBoolean("HideSeen", hideread);
-                if (param.args[4] != "sender" && (customHideReceipt || ghostmode)) {
-                    if (!ReflectionUtils.isCalledFromMethod(method2) && ReflectionUtils.isCalledFromMethod(mInChat) && !customHideRead) {
-                        return;
-                    }
-                    param.args[4] = "inactive";
-                }
-                if (param.args[4] == "inactive") {
-                    Object fmessageObj = WppCore.getFMessageFromKey(key);
-                    var fmessage = new FMessageWpp(fmessageObj);
-                    var messageId = fmessage.getKey().messageID;
-                    MessageHistory.getInstance().insertHideSeenMessage(rawJid, messageId, MessageHistory.MessageType.MESSAGE_TYPE, false);
-                    if (fmessage.isViewOnce()) {
-                        MessageHistory.getInstance().insertHideSeenMessage(rawJid, messageId, MessageHistory.MessageType.VIEW_ONCE_TYPE, false);
-                    }
-                    HideSeenView.updateAllBubbleViews();
-                }
+                if (!isValidCallContext(outsideMethod, hideViewInChatMethod)) return;
+
+                FMessageWpp.Key keyMessage = extractKeyMessage(param);
+                if (keyMessage == null) return;
+
+                FMessageWpp fMessage = keyMessage.getFMessage();
+                if (isAlreadyHidden(fMessage)) return;
+
+                Object userJidObject = extractUserJidObject(param);
+                if (userJidObject == null) return;
+
+                FMessageWpp.UserJid currentUserJid = new FMessageWpp.UserJid(userJidObject);
+                processReceiptHiding(param, fMessage, currentUserJid);
             }
         });
+    }
+
+    private boolean isValidCallContext(Method outsideMethod, Method hideViewInChatMethod) {
+        return ReflectionUtils.isCalledFromMethod(outsideMethod) || ReflectionUtils.isCalledFromMethod(hideViewInChatMethod);
+    }
+
+    private Object extractUserJidObject(XC_MethodHook.MethodHookParam param) throws Exception {
+        Class<?> jidClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "jid.Jid");
+        return ReflectionUtils.getArg(param.args, jidClass, 0);
+    }
+
+    private FMessageWpp.Key extractKeyMessage(XC_MethodHook.MethodHookParam param) throws Exception {
+        Object userJidObject = extractUserJidObject(param);
+        if (userJidObject == null) return null;
+
+        List<Pair<Integer, Class<? extends String>>> strings = ReflectionUtils.findClassesOfType(
+                ((Method) param.method).getParameterTypes(), String.class);
+        return getKeyMessage(param, userJidObject, strings);
+    }
+
+    private boolean isAlreadyHidden(FMessageWpp fMessage) {
+        if (fMessage == null) return false;
+
+        FMessageWpp.Key key = fMessage.getKey();
+        MessageHistory.MessageType type = fMessage.isViewOnce()
+                ? MessageHistory.MessageType.VIEW_ONCE_TYPE
+                : MessageHistory.MessageType.MESSAGE_TYPE;
+
+        return MessageHistory.getInstance().getHideSeenMessage(
+                key.remoteJid.getPhoneRawString(), key.messageID, type) != null;
+    }
+
+    private void processReceiptHiding(XC_MethodHook.MethodHookParam param, FMessageWpp fMessage,
+                                      FMessageWpp.UserJid currentUserJid) {
+        JSONObject privacy = CustomPrivacy.getJSON(currentUserJid.getPhoneNumber());
+        List<Pair<Integer, Class<? extends String>>> strings = ReflectionUtils.findClassesOfType(
+                ((Method) param.method).getParameterTypes(), String.class);
+        int msgTypeIdx = strings.get(strings.size() - 1).first;
+
+        if (shouldHideReceipt(param, privacy, msgTypeIdx)) {
+            param.args[msgTypeIdx] = RECEIPT_TYPE_INACTIVE;
+        }
+
+        if (RECEIPT_TYPE_INACTIVE.equals(param.args[msgTypeIdx])) {
+            recordHiddenMessage(fMessage, currentUserJid);
+        }
+    }
+
+    private boolean shouldHideReceipt(XC_MethodHook.MethodHookParam param, JSONObject privacy, int msgTypeIdx) {
+        boolean customHideReceipt = privacy.optBoolean("HideReceipt", hideReceipt);
+        boolean customHideRead = privacy.optBoolean("HideSeen", hideRead);
+
+        if (RECEIPT_TYPE_SENDER.equals(param.args[msgTypeIdx])) {
+            return false;
+        }
+
+        if (customHideReceipt || ghostMode) {
+            return !WppCore.isConversationResumed() || customHideRead || ghostMode;
+        }
+
+        return false;
+    }
+
+    private void recordHiddenMessage(FMessageWpp fMessage, FMessageWpp.UserJid userJid) {
+        FMessageWpp.Key key = fMessage.getKey();
+        MessageHistory.MessageType type = fMessage.isViewOnce()
+                ? MessageHistory.MessageType.VIEW_ONCE_TYPE
+                : MessageHistory.MessageType.MESSAGE_TYPE;
+
+        MessageHistory.getInstance().insertHideSeenMessage(
+                userJid.getPhoneRawString(), key.messageID, type, false);
+        HideSeenView.updateAllBubbleViews();
     }
 
     @NonNull

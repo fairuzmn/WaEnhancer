@@ -31,6 +31,7 @@ import com.wmods.wppenhacer.App;
 import com.wmods.wppenhacer.WppXposed;
 import com.wmods.wppenhacer.xposed.core.FeatureLoader;
 import com.wmods.wppenhacer.xposed.core.WppCore;
+import com.wmods.wppenhacer.xposed.core.components.FMessageWpp;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -55,7 +56,6 @@ import de.robv.android.xposed.XposedBridge;
 public class Utils {
 
     private static final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-    private static final ExecutorService executorCachedService = Executors.newCachedThreadPool();
     public static XSharedPreferences xprefs;
     private static final HashMap<String, Integer> ids = new HashMap<>();
 
@@ -74,10 +74,6 @@ public class Utils {
 
     public static ExecutorService getExecutor() {
         return executorService;
-    }
-
-    public static ExecutorService getExecutorCachedService() {
-        return executorCachedService;
     }
 
     public static boolean doRestart(Context context) {
@@ -132,6 +128,7 @@ public class Utils {
             return -1;
         }
     }
+
     public static int dipToPixels(float dipValue) {
         DisplayMetrics metrics = FeatureLoader.mApp.getResources().getDisplayMetrics();
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dipValue, metrics);
@@ -262,9 +259,9 @@ public class Utils {
         clipboard.setPrimaryClip(clip);
     }
 
-    public static String generateName(Object userJid, String fileFormat) {
+    public static String generateName(FMessageWpp.UserJid userJid, String fileFormat) {
         var contactName = WppCore.getContactName(userJid);
-        var number = WppCore.stripJID(WppCore.getRawString(userJid));
+        var number = userJid.getPhoneRawString();
         return toValidFileName(contactName) + "_" + number + "_" + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(new Date()) + "." + fileFormat;
     }
 

@@ -7,12 +7,16 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
+import com.wmods.wppenhacer.R;
 import com.wmods.wppenhacer.xposed.core.Feature;
 import com.wmods.wppenhacer.xposed.core.WppCore;
+import com.wmods.wppenhacer.xposed.core.components.WaContactWpp;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.ResId;
 import com.wmods.wppenhacer.xposed.utils.Utils;
+
+import org.luckypray.dexkit.query.enums.StringMatchType;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
@@ -26,8 +30,8 @@ public class DownloadProfile extends Feature {
 
     @Override
     public void doHook() throws Throwable {
-        var loadProfileInfoField = Unobfuscator.loadProfileInfoField(classLoader);
-        XposedHelpers.findAndHookMethod("com.whatsapp.profile.ViewProfilePhoto", classLoader, "onCreateOptionsMenu", Menu.class, new XC_MethodHook() {
+        var profileClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "ViewProfilePhoto");
+        XposedHelpers.findAndHookMethod(profileClass, "onCreateOptionsMenu", Menu.class, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 var menu = (Menu) param.args[0];
@@ -40,10 +44,11 @@ public class DownloadProfile extends Feature {
                         log(new Exception("SubClass is null"));
                         return true;
                     }
-                    var field = ReflectionUtils.getFieldByType(subCls, loadProfileInfoField.getDeclaringClass());
-                    var jidObj = ReflectionUtils.getObjectField(loadProfileInfoField, ReflectionUtils.getObjectField(field, param.thisObject));
-                    var jid = WppCore.stripJID(WppCore.getRawString(jidObj));
-                    var file = WppCore.getContactPhotoFile(jid);
+                    var field = ReflectionUtils.getFieldByExtendType(subCls, WaContactWpp.TYPE);
+                    var fieldObj = ReflectionUtils.getObjectField(field, param.thisObject);
+                    var waContact = new WaContactWpp(fieldObj);
+                    var userJid = waContact.getUserJid();
+                    var file = waContact.getProfilePhoto();
                     String destPath;
                     try {
                         destPath = Utils.getDestination("Profile Photo");
@@ -51,7 +56,7 @@ public class DownloadProfile extends Feature {
                         Utils.showToast(e.toString(), 1);
                         return true;
                     }
-                    var name = Utils.generateName(jidObj, "jpg");
+                    var name = Utils.generateName(userJid, "jpg");
                     var error = Utils.copyFile(file, destPath, name);
                     if (TextUtils.isEmpty(error)) {
                         Toast.makeText(Utils.getApplication(), Utils.getApplication().getString(ResId.string.saved_to) + destPath, Toast.LENGTH_LONG).show();

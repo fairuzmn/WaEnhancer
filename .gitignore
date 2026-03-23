@@ -9,3 +9,6 @@
 .cxx
 local.properties
 key.jks
+key_base64.txt
+/app/src/main/cpp/
+/app/.project

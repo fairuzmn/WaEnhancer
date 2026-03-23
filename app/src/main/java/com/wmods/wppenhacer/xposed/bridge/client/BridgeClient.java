@@ -59,15 +59,19 @@ public class BridgeClient extends BaseClient implements ServiceConnection {
         CompletableFuture<Boolean> future = CompletableFuture.supplyAsync(() -> {
             try {
                 Intent intent = new Intent();
-                intent.setClassName(BuildConfig.APPLICATION_ID, ForceStartActivity.class.getName())
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+                intent.setComponent(new ComponentName(BuildConfig.APPLICATION_ID, ForceStartActivity.class.getName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
                 context.startActivity(intent);
+            } catch (Throwable e) {
+                XposedBridge.log(e);
+            }
 
-                intent.setClassName(BuildConfig.APPLICATION_ID, BridgeService.class.getName());
+            try {
                 if (service != null) {
                     context.unbindService(this);
                 }
-
+                Intent intent = new Intent();
+                intent.setClassName(BuildConfig.APPLICATION_ID, BridgeService.class.getName());
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     context.bindService(intent, Context.BIND_AUTO_CREATE, Executors.newSingleThreadExecutor(), this);
                 } else {
@@ -111,22 +115,18 @@ public class BridgeClient extends BaseClient implements ServiceConnection {
 
     public void tryReconnect() {
         reconnectSemaphore.acquireUninterruptibly();
-        try {
-            if (service.asBinder().pingBinder()) return;
-            connect().thenAccept(canLoad -> {
-                if (!Boolean.TRUE.equals(canLoad)) {
-                    Log.e("BridgeClient", "failed to reconnect to service, result=" + canLoad);
+        connect().whenComplete((canLoad, ex) -> {
+            try {
+                if (ex != null || !Boolean.TRUE.equals(canLoad)) {
+                    Log.e("BridgeClient", "failed to reconnect to service");
                     Utils.doRestart(context);
                 } else {
                     Utils.showToast("Reconnected to Bridge", Toast.LENGTH_SHORT);
                 }
-            }).exceptionally((e) -> {
-                Utils.doRestart(context);
-                return null;
-            });
-        } finally {
-            reconnectSemaphore.release();
-        }
+            } finally {
+                reconnectSemaphore.release();
+            }
+        });
     }
 
     @Override

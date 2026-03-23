@@ -1,5 +1,7 @@
 package com.wmods.wppenhacer.xposed.utils;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.Pair;
 
 import androidx.annotation.NonNull;
@@ -18,6 +20,19 @@ import de.robv.android.xposed.XposedHelpers;
 
 @SuppressWarnings("unused")
 public class ReflectionUtils {
+
+    private static SharedPreferences cachePrefs;
+
+    /**
+     * Initialize the SharedPreferences for caching reflection results
+     *
+     * @param context Application context
+     */
+    public static void initCache(Context context) {
+        if (cachePrefs == null) {
+            cachePrefs = context.getSharedPreferences("UnobfuscatorCache", Context.MODE_PRIVATE);
+        }
+    }
 
     public static Map<String, Class<?>> primitiveClasses = Map.of(
             "byte", Byte.TYPE,
@@ -130,12 +145,71 @@ public class ReflectionUtils {
         return Arrays.stream(cls.getFields()).filter(f -> type == f.getType()).collect(Collectors.toList());
     }
 
-    public static Field getFieldByExtendType(Class<?> cls, Class<?> type) {
-        return Arrays.stream(cls.getFields()).filter(f -> type.isAssignableFrom(f.getType())).findFirst().orElse(null);
+    public static Field getFieldByExtendType(Class<?> cls, String className) {
+        if (cls == null) return null;
+        if (className == null) return null;
+        return getFieldByExtendType(cls, findClass(className, cls.getClassLoader()));
     }
 
+    public static Field getFieldByExtendType(Class<?> cls, Class<?> type) {
+        if (cachePrefs == null) {
+            return Arrays.stream(cls.getFields()).filter(f -> type.isAssignableFrom(f.getType())).findFirst().orElse(null);
+        }
+
+        String cacheKey = "field_cache_" + cls.getName() + "_" + type.getName();
+
+        String cachedFieldName = cachePrefs.getString(cacheKey, null);
+        if (cachedFieldName != null) {
+            try {
+                return cls.getField(cachedFieldName);
+            } catch (NoSuchFieldException e) {
+                cachePrefs.edit().remove(cacheKey).commit();
+            }
+        }
+
+        Field field = Arrays.stream(cls.getFields()).filter(f -> type.isAssignableFrom(f.getType())).findFirst().orElse(null);
+
+        if (field != null) {
+            if (field.getDeclaringClass() == cls) {
+                cachePrefs.edit().putString(cacheKey, field.getName()).commit();
+            }
+        }
+
+        return field;
+    }
+
+    public static Field getFieldByType(Class<?> cls, String className) {
+        if (cls == null) return null;
+        if (className == null) return null;
+        return getFieldByType(cls, findClass(className, cls.getClassLoader()));
+    }
+
+
     public static Field getFieldByType(Class<?> cls, Class<?> type) {
-        return Arrays.stream(cls.getFields()).filter(f -> type == f.getType()).findFirst().orElse(null);
+        if (cachePrefs == null) {
+            return Arrays.stream(cls.getFields()).filter(f -> type == f.getType()).findFirst().orElse(null);
+        }
+
+        String cacheKey = "field_cache_direct_" + cls.getName() + "_" + type.getName();
+
+        String cachedFieldName = cachePrefs.getString(cacheKey, null);
+        if (cachedFieldName != null) {
+            try {
+                return cls.getField(cachedFieldName);
+            } catch (NoSuchFieldException e) {
+                cachePrefs.edit().remove(cacheKey).apply();
+            }
+        }
+
+        Field field = Arrays.stream(cls.getFields()).filter(f -> type == f.getType()).findFirst().orElse(null);
+
+        if (field != null) {
+            if (field.getDeclaringClass() == cls) {
+                cachePrefs.edit().putString(cacheKey, field.getName()).apply();
+            }
+        }
+
+        return field;
     }
 
     public static Object callMethod(Method method, Object instance, Object... args) {
@@ -173,9 +247,9 @@ public class ReflectionUtils {
         return null;
     }
 
-    public static Object getObjectField(Field loadProfileInfoField, Object thisObject) {
+    public static Object getObjectField(Field field, Object thisObject) {
         try {
-            return loadProfileInfoField.get(thisObject);
+            return field.get(thisObject);
         } catch (Exception e) {
             return null;
         }
@@ -193,22 +267,35 @@ public class ReflectionUtils {
         return -1;
     }
 
-    public static List<Pair<Integer, Object>> findArrayOfType(Object[] args, Class<?> type) {
-        var result = new ArrayList<Pair<Integer, Object>>();
+    public static <T> List<Pair<Integer, T>> findInstancesOfType(Object[] args, Class<T> type) {
+        var result = new ArrayList<Pair<Integer, T>>();
         for (int i = 0; i < args.length; i++) {
             var arg = args[i];
-            if (arg == null) continue;
-            if (arg instanceof Class) {
-                if (type.isAssignableFrom((Class) arg)) {
-                    result.add(new Pair<>(i, arg));
-                }
-                continue;
-            }
-            if (type.isAssignableFrom(arg.getClass()) || type.isInstance(arg)) {
-                result.add(new Pair<>(i, arg));
+            if (arg == null || arg instanceof Class) continue;
+
+            if (type.isInstance(arg)) {
+                result.add(new Pair<>(i, type.cast(arg)));
             }
         }
         return result;
+    }
+
+    public static <T> List<Pair<Integer, Class<? extends T>>> findClassesOfType(Class[] args, Class<T> type) {
+        var result = new ArrayList<Pair<Integer, Class<? extends T>>>();
+        for (int i = 0; i < args.length; i++) {
+            var arg = args[i];
+            if (type.isAssignableFrom(arg)) {
+                //noinspection unchecked
+                result.add(new Pair<>(i, (Class<? extends T>) arg));
+            }
+        }
+        return result;
+    }
+
+    public static <T> T getArg(Object[] args, Class<T> typeClass, int i) {
+        var list = findInstancesOfType(args, typeClass);
+        if (list.size() <= i) return null;
+        return list.get(i).second;
     }
 
     public static boolean isCalledFromString(String contains) {
@@ -257,11 +344,6 @@ public class ReflectionUtils {
         return false;
     }
 
-    public static <T> T getArg(Object[] args, Class<T> typeClass, int i) {
-        var list = findArrayOfType(args, typeClass);
-        if (list.size() <= i) throw new IllegalArgumentException("Index out of bounds for args");
-        return typeClass.cast(list.get(i).second);
-    }
 
     public static void setObjectField(Field field, Object instance, Object value) {
         try {

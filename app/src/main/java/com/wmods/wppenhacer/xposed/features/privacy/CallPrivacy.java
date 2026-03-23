@@ -8,13 +8,15 @@ import androidx.annotation.NonNull;
 
 import com.wmods.wppenhacer.xposed.core.Feature;
 import com.wmods.wppenhacer.xposed.core.WppCore;
+import com.wmods.wppenhacer.xposed.core.components.FMessageWpp;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.features.general.Tasker;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.Utils;
 
+import org.luckypray.dexkit.query.enums.StringMatchType;
+
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Objects;
@@ -27,13 +29,23 @@ import de.robv.android.xposed.XposedHelpers;
 
 public class CallPrivacy extends Feature {
 
+    private Object mVoipManager;
+
     /**
      * @noinspection unchecked
      */
     @Override
     public void doHook() throws Throwable {
 
-        var clazzVoip = XposedHelpers.findClass("com.whatsapp.voipcalling.Voip", classLoader);
+        var voipManagerClass = Unobfuscator.loadVoipManager(classLoader);
+        XposedBridge.hookAllConstructors(voipManagerClass, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                mVoipManager = param.thisObject;
+            }
+        });
+
+        var clazzVoip = WppCore.getVoipManagerClass(classLoader);
         var endCallMethod = ReflectionUtils.findMethodUsingFilter(clazzVoip, m -> m.getName().equals("endCall"));
         var rejectCallMethod = ReflectionUtils.findMethodUsingFilter(clazzVoip, m -> m.getName().equals("rejectCall"));
 
@@ -43,7 +55,7 @@ public class CallPrivacy extends Feature {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 Object callinfo;
-                Class<?> callInfoClass = XposedHelpers.findClass("com.whatsapp.voipcalling.CallInfo", classLoader);
+                Class<?> callInfoClass = WppCore.getVoipCallInfoClass(classLoader);
                 if (param.args[0] instanceof Message) {
                     callinfo = ((Message) param.args[0]).obj;
                 } else if (param.args.length > 1 && callInfoClass.isInstance(param.args[1])) {
@@ -54,33 +66,27 @@ public class CallPrivacy extends Feature {
                 }
                 if (callinfo == null || !callInfoClass.isInstance(callinfo)) return;
                 if ((boolean) XposedHelpers.callMethod(callinfo, "isCaller")) return;
-                var userJid = XposedHelpers.callMethod(callinfo, "getPeerJid");
+                var userJid = new FMessageWpp.UserJid(XposedHelpers.callMethod(callinfo, "getPeerJid"));
                 var callId = XposedHelpers.callMethod(callinfo, "getCallId");
                 var type = Integer.parseInt(prefs.getString("call_privacy", "0"));
-                Tasker.sendTaskerEvent(WppCore.getContactName(userJid), WppCore.stripJID(WppCore.getRawString(userJid)), "call_received");
+                Tasker.sendTaskerEvent(WppCore.getContactName(userJid), userJid.getPhoneNumber(), "call_received");
                 var blockCall = checkCallBlock(userJid, PrivacyType.getByValue(type));
                 if (!blockCall) return;
                 var rejectType = prefs.getString("call_type", "no_internet");
 
-                // Need Instance of VoipManager from WhatsApp 2.24.24.XX
-                Object voipManager = null;
-                if (!Modifier.isStatic(endCallMethod.getModifiers())) {
-                    var fieldVoipManager = ReflectionUtils.findFieldUsingFilterIfExists(param.thisObject.getClass(), field -> clazzVoip.isInstance(ReflectionUtils.getObjectField(field, param.thisObject)));
-                    voipManager = fieldVoipManager == null ? null : fieldVoipManager.get(param.thisObject);
-                }
                 switch (rejectType) {
                     case "uncallable":
                     case "declined":
                         var params = ReflectionUtils.initArray(rejectCallMethod.getParameterTypes());
                         params[0] = callId;
                         params[1] = "declined".equals(rejectType) ? null : rejectType;
-                        ReflectionUtils.callMethod(rejectCallMethod, voipManager, params);
+                        ReflectionUtils.callMethod(rejectCallMethod, mVoipManager, params);
                         param.setResult(true);
                         break;
                     case "ended":
                         var params1 = ReflectionUtils.initArray(endCallMethod.getParameterTypes());
                         params1[0] = true;
-                        ReflectionUtils.callMethod(endCallMethod, voipManager, params1);
+                        ReflectionUtils.callMethod(endCallMethod, mVoipManager, params1);
                         param.setResult(true);
                         break;
                     default:
@@ -88,11 +94,13 @@ public class CallPrivacy extends Feature {
             }
         });
 
-        XposedBridge.hookAllMethods(classLoader.loadClass("com.whatsapp.voipcalling.Voip"), "nativeHandleIncomingXmppOffer", new XC_MethodHook() {
+        XposedBridge.hookAllMethods(WppCore.getVoipManagerClass(classLoader), "nativeHandleIncomingXmppOffer", new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 if (!prefs.getString("call_type", "no_internet").equals("no_internet")) return;
-                var userJid = param.args[0];
+                var jidClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "jid.Jid");
+                var jidObj = ReflectionUtils.getArg(param.args, jidClass, 0);
+                var userJid = new FMessageWpp.UserJid(jidObj);
                 var type = Integer.parseInt(prefs.getString("call_privacy", "0"));
                 var block = checkCallBlock(userJid, PrivacyType.getByValue(type));
                 if (block) {
@@ -109,12 +117,9 @@ public class CallPrivacy extends Feature {
         super(loader, preferences);
     }
 
-    public boolean checkCallBlock(Object jid, PrivacyType type) throws IllegalAccessException, InvocationTargetException {
-        var rawPhoneNumber = WppCore.getRawString(jid);
-        rawPhoneNumber = rawPhoneNumber.replaceFirst("\\.[\\d:]+@", "@");
-        var userJid = WppCore.createUserJid(rawPhoneNumber);
+    public boolean checkCallBlock(FMessageWpp.UserJid userJid, PrivacyType type) throws IllegalAccessException, InvocationTargetException {
 
-        var phoneNumber = WppCore.stripJID(rawPhoneNumber);
+        var phoneNumber = userJid.getPhoneNumber();
 
         if (phoneNumber == null) return false;
 
@@ -138,7 +143,7 @@ public class CallPrivacy extends Feature {
                 var callBlockList = prefs.getString("call_block_contacts", "[]");
                 var blockList = Arrays.stream(callBlockList.substring(1, callBlockList.length() - 1).split(", ")).map(String::trim).collect(Collectors.toCollection(ArrayList::new));
                 for (var blockNumber : blockList) {
-                    if (!TextUtils.isEmpty(blockNumber) && Objects.equals(rawPhoneNumber, blockNumber)) {
+                    if (!TextUtils.isEmpty(blockNumber) && Objects.equals(userJid.getPhoneRawString(), blockNumber)) {
                         return true;
                     }
                 }
@@ -147,7 +152,7 @@ public class CallPrivacy extends Feature {
                 var callWhiteList = prefs.getString("call_white_contacts", "[]");
                 var whiteList = Arrays.stream(callWhiteList.substring(1, callWhiteList.length() - 1).split(", ")).map(String::trim).collect(Collectors.toCollection(ArrayList::new));
                 for (var whiteNumber : whiteList) {
-                    if (!TextUtils.isEmpty(whiteNumber) && Objects.equals(rawPhoneNumber, whiteNumber)) {
+                    if (!TextUtils.isEmpty(whiteNumber) && Objects.equals(userJid.getPhoneRawString(), whiteNumber)) {
                         return false;
                     }
                 }

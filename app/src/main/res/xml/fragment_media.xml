@@ -42,7 +42,7 @@
         <com.wmods.wppenhacer.preference.FloatSeekBarPreference
             android:defaultValue="60"
             app:key="video_limit_size"
-            app:maxValue="120"
+            app:maxValue="90"
             app:minValue="30"
             app:title="@string/increase_video_size_limit"
             app:valueSpacing="10" />
@@ -63,6 +63,42 @@
             app:key="video_maxfps"
             app:summary="@string/send_video_in_60fps_sum"
             app:title="@string/send_video_in_60fps" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
+        app:title="@string/call_recording_title">
+
+        <rikka.material.preference.MaterialSwitchPreference
+            app:key="call_recording_enable"
+            app:summary="@string/call_recording_enable_sum"
+            app:title="@string/call_recording_enable" />
+
+        <com.wmods.wppenhacer.preference.FileSelectPreference
+            android:defaultValue="/sdcard/Music/WaEnhancer/Recordings"
+            app:dependency="call_recording_enable"
+            app:directory="true"
+            app:key="call_recording_path"
+            app:title="@string/call_recording_path" />
+
+        <rikka.material.preference.MaterialSwitchPreference
+            android:defaultValue="false"
+            app:dependency="call_recording_enable"
+            app:key="call_recording_toast"
+            app:summary="@string/call_recording_toast_summary"
+            app:title="@string/call_recording_toast_title" />
+
+        <Preference
+            app:dependency="call_recording_enable"
+            app:key="call_recording_settings"
+            app:summary="@string/recording_mode_description"
+            app:title="@string/call_recording_settings" />
+
+        <rikka.material.preference.MaterialSwitchPreference
+            android:enabled="false"
+            app:key="video_call_screen_rec"
+            app:summary="@string/coming_soon"
+            app:title="@string/video_call_screen_rec" />
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -100,17 +136,26 @@
             app:summary="@string/audio_transcription_sum"
             app:title="@string/audio_transcription" />
 
-        <rikka.material.preference.MaterialSwitchPreference
+        <ListPreference
             android:dependency="audio_transcription"
-            app:key="assemblyai"
-            app:summary="@string/assemblyai_sum"
-            app:title="@string/assemblyai" />
+            android:defaultValue="assemblyai"
+            android:entries="@array/transcription_provider_entries"
+            android:entryValues="@array/transcription_provider_values"
+            app:key="transcription_provider"
+            app:summary="@string/transcription_provider_sum"
+            app:title="@string/transcription_provider" />
 
         <EditTextPreference
-            android:dependency="assemblyai"
+            android:dependency="audio_transcription"
             app:key="assemblyai_key"
             app:summary="@string/assemblyai_key_sum"
             app:title="@string/assemblyai_key" />
+
+        <EditTextPreference
+            android:dependency="audio_transcription"
+            app:key="groq_api_key"
+            app:summary="@string/groq_api_key_sum"
+            app:title="@string/groq_api_key" />
 
     </PreferenceCategory>
 

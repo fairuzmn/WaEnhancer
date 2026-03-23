@@ -7,13 +7,16 @@ import androidx.annotation.Nullable;
 
 import com.wmods.wppenhacer.xposed.core.Feature;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
+import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Spliterator;
 
@@ -33,13 +36,24 @@ public class PinnedLimit extends Feature {
     @Override
     @SuppressLint("DiscouragedApi")
     public void doHook() throws Throwable {
-
-        var pinnedSetMethod = Unobfuscator.loadPinnedHashSetMethod(classLoader);
+        var pinnedHashSetMethod = Unobfuscator.loadPinnedHashSetMethod(classLoader);
         var pinnedInChatMethod = Unobfuscator.loadPinnedInChatMethod(classLoader);
 
 
         // increase pinned limit in chat to 60
         XposedBridge.hookMethod(pinnedInChatMethod, XC_MethodReplacement.returnConstant(60));
+
+        if (prefs.getBoolean("pinnedlimit", false)) {
+            // Disable pinned called by Server to prevent it from clearing the pinned list
+            var setPinnedLimitMethod = Unobfuscator.loadSetPinnedLimitMethod(classLoader);
+            XposedBridge.hookMethod(setPinnedLimitMethod, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (ReflectionUtils.isCalledFromString("SyncResponseHandler"))
+                        param.setResult(null);
+                }
+            });
+        }
 
         // Fix bug in initialCapacity of LinkedHashSet
         XposedHelpers.findAndHookConstructor(LinkedHashSet.class, int.class, new XC_MethodHook() {
@@ -61,14 +75,15 @@ public class PinnedLimit extends Feature {
             }
         });
 
-
         // This creates a modified linkedhashMap to return 0 if the fixed list is less than 60.
-        XposedBridge.hookMethod(pinnedSetMethod, new XC_MethodHook() {
+        XposedBridge.hookMethod(pinnedHashSetMethod, new XC_MethodHook() {
 
             @Override
             @SuppressWarnings("unchecked")
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 var map = (Map) param.getResult();
+                var thisObject = Modifier.isStatic(param.method.getModifiers()) ? param.args[0] : param.thisObject;
+
                 PinnedLinkedHashMap<Object> pinnedMod;
                 if (!(map instanceof PinnedLinkedHashMap)) {
                     pinnedMod = new PinnedLinkedHashMap<>();
@@ -78,6 +93,36 @@ public class PinnedLimit extends Feature {
                     pinnedMod = (PinnedLinkedHashMap<Object>) map;
                 }
                 pinnedMod.setLimit(prefs.getBoolean("pinnedlimit", false) ? 60 : 3);
+                var keySet = map.keySet();
+                var sets = ReflectionUtils.getFieldsByType(thisObject.getClass(), Set.class);
+                for (var setField : sets) {
+                    var set = (Set) setField.get(thisObject);
+                    if (Objects.equals(set, keySet)) {
+                        var newKeySet = pinnedMod.keySet();
+                        newKeySet.setDisableInterator(false);
+                        setField.set(thisObject, newKeySet);
+                    }
+                }
+            }
+        });
+
+        var method = Unobfuscator.loadPinnedFilterMethod(classLoader);
+        XposedBridge.hookMethod(method, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (!(param.args[0] instanceof PinnedLinkedHashMap.PinnedKeySet<?>)) {
+                    return;
+                }
+                var set = (Set) param.getResult();
+                PinnedLinkedHashMap<Object> pinnedMod;
+                pinnedMod = new PinnedLinkedHashMap<>();
+                pinnedMod.setLimit(prefs.getBoolean("pinnedlimit", false) ? 60 : 3);
+                for (Object item : set) {
+                    pinnedMod.put(item, item);
+                }
+                PinnedLinkedHashMap.PinnedKeySet<Object> newKeySet = pinnedMod.keySet();
+                newKeySet.setDisableInterator(false);
+                param.setResult(pinnedMod.keySet());
             }
         });
 
@@ -105,19 +150,13 @@ public class PinnedLimit extends Feature {
 
         @NonNull
         @Override
-        public Set<T> keySet() {
+        public PinnedKeySet<T> keySet() {
             return new PinnedKeySet<>(this, super.keySet());
         }
 
-        static class PinnedKeySet<T> implements Set<T> {
+        record PinnedKeySet<T>(PinnedLinkedHashMap<T> pinnedKeySet, Set<T> set) implements Set<T> {
 
-            private final Set<T> set;
-            private final PinnedLinkedHashMap<T> pinnedKeySet;
-
-            public PinnedKeySet(PinnedLinkedHashMap<T> pinnedKeySet, Set<T> set) {
-                this.pinnedKeySet = pinnedKeySet;
-                this.set = set;
-            }
+            private static boolean disableInterator = true;
 
             @Override
             public int size() {
@@ -137,6 +176,21 @@ public class PinnedLimit extends Feature {
             @NonNull
             @Override
             public Iterator<T> iterator() {
+                if (disableInterator) {
+                    if (pinnedKeySet.size() < pinnedKeySet.limit) {
+                        return new Iterator<T>() {
+                            @Override
+                            public boolean hasNext() {
+                                return false;
+                            }
+
+                            @Override
+                            public T next() {
+                                return null;
+                            }
+                        };
+                    }
+                }
                 return set.iterator();
             }
 
@@ -154,13 +208,20 @@ public class PinnedLimit extends Feature {
 
             @Override
             public boolean add(@Nullable T t) {
-                return set.add(t);
+                var hadKey = pinnedKeySet.containsKey(t);
+                pinnedKeySet.put(t, t);
+                return !hadKey;
             }
 
             @Override
             public boolean remove(@Nullable Object o) {
-                return set.remove(o);
+                var hadKey = pinnedKeySet.containsKey(o);
+                if (hadKey) {
+                    pinnedKeySet.remove(o);
+                }
+                return hadKey;
             }
+
 
             @Override
             public boolean containsAll(@NonNull Collection<?> c) {
@@ -169,7 +230,11 @@ public class PinnedLimit extends Feature {
 
             @Override
             public boolean addAll(@NonNull Collection<? extends T> c) {
-                return false;
+                var changed = false;
+                for (T item : c) {
+                    changed |= add(item);
+                }
+                return changed;
             }
 
             @Override
@@ -192,6 +257,10 @@ public class PinnedLimit extends Feature {
             @Override
             public Spliterator<T> spliterator() {
                 return set.spliterator();
+            }
+
+            public void setDisableInterator(boolean b) {
+                this.disableInterator = b;
             }
         }
     }

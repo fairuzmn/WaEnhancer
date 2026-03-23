@@ -10,6 +10,7 @@ import androidx.annotation.NonNull;
 
 import com.wmods.wppenhacer.xposed.core.Feature;
 import com.wmods.wppenhacer.xposed.core.WppCore;
+import com.wmods.wppenhacer.xposed.core.components.FMessageWpp;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.ResId;
@@ -36,20 +37,16 @@ public class GroupAdmin extends Feature {
             @SuppressLint("ResourceType")
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                var targetObj = param.thisObject != null
-                        ? param.thisObject
-                        : param.args[1];
-
-                var fMessage = XposedHelpers.callMethod(targetObj, "getFMessage");
-                var userJidClass = XposedHelpers.findClass("com.whatsapp.jid.UserJid", classLoader);
-                var methodResult = ReflectionUtils.findMethodUsingFilter(fMessage.getClass(), method -> method.getReturnType() == userJidClass && method.getParameterCount() == 0);
-                var userJid = ReflectionUtils.callMethod(methodResult, fMessage);
-                var chatCurrentJid = WppCore.getCurrentRawJID();
-                if (!WppCore.isGroup(chatCurrentJid)) return;
+                var targetObj = param.thisObject != null ? param.thisObject : param.args[1];
+                Object fMessageObj = XposedHelpers.callMethod(targetObj, "getFMessage");
+                var fMessage = new FMessageWpp(fMessageObj);
+                var userJid = fMessage.getUserJid();
+                var chatCurrentJid = WppCore.getCurrentUserJid();
+                if (!chatCurrentJid.isGroup()) return;
                 var field = ReflectionUtils.getFieldByType(targetObj.getClass(), grpcheckAdmin.getDeclaringClass());
                 var grpParticipants = field.get(targetObj);
-                var jidGrp = jidFactory.invoke(null, chatCurrentJid);
-                var result = ReflectionUtils.callMethod(grpcheckAdmin, grpParticipants, jidGrp, userJid);
+                var jidGrp = jidFactory.invoke(null, chatCurrentJid.getUserRawString());
+                var result = grpcheckAdmin.invoke(grpParticipants, jidGrp, userJid.userJid);
                 var view = (View) targetObj;
                 var context = view.getContext();
                 ImageView iconAdmin;

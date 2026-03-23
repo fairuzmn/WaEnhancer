@@ -11,6 +11,8 @@ import com.wmods.wppenhacer.xposed.core.db.MessageStore;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 
+import org.luckypray.dexkit.util.DexSignUtil;
+
 import java.util.Set;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -69,9 +71,9 @@ public class ChatLimit extends Feature {
 
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    var list = ReflectionUtils.findArrayOfType(param.args, Set.class);
+                    var list = ReflectionUtils.findInstancesOfType(param.args, Set.class);
                     if (list.isEmpty()) return;
-                    var listMessages = (Set) list.get(0).second;
+                    var listMessages = list.get(0).second;
                     var isExpired = false;
                     for (var fmessageObj : listMessages) {
                         var timestamp = fmessageTimestampMethod.getLong(fmessageObj);
@@ -103,6 +105,8 @@ public class ChatLimit extends Feature {
         }
 
         var seeMoreMethod = Unobfuscator.loadSeeMoreConstructor(classLoader);
+        logDebug("SeenMore Method: ", DexSignUtil.getMethodDescriptor(seeMoreMethod));
+
         XposedBridge.hookMethod(seeMoreMethod, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {

@@ -1,9 +1,9 @@
-[WA AND WA BUSINESS]
-* Add support for 2.25.25.XX
+[ADDED]
+* Added support for WA/WB 2.26.10.xx
+* Added support for other architectures (x86, x86_64, armv7).
 
-[FEATURE]
-* Added a feature to disable WhatsApp's version check. This allows you to remain on a specific WhatsApp version.
-  To prevent automatic updates, you can also go to Lsposed and select the Play Store for WAEnhancer or Disable auto update in the Play Store.
+[IMPROVED]
+* Improvements when using custom themes; now flashing icons and some other visual elements no longer lag
 
-[NOTE]
-* Show online icon on the conversation screen is not working yet.
+[FIXED]
+* Fixed issue when sending media in high quality.

@@ -17,7 +17,6 @@ import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.collection.ArraySet;
 
 import com.wmods.wppenhacer.xposed.core.Feature;
 import com.wmods.wppenhacer.xposed.core.WppCore;
@@ -26,20 +25,24 @@ import com.wmods.wppenhacer.xposed.core.db.MessageHistory;
 import com.wmods.wppenhacer.xposed.core.db.MessageStore;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.features.customization.HideSeenView;
+import com.wmods.wppenhacer.xposed.features.listeners.MenuStatusListener;
 import com.wmods.wppenhacer.xposed.utils.DesignUtils;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.ResId;
 import com.wmods.wppenhacer.xposed.utils.Utils;
 
+import org.luckypray.dexkit.query.enums.StringMatchType;
+
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentHashMap;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XSharedPreferences;
@@ -48,13 +51,13 @@ import de.robv.android.xposed.XposedHelpers;
 
 public class SeenTick extends Feature {
 
-    private static final ArraySet<FMessageWpp> statuses = new ArraySet<>();
+    private final Set<FMessageWpp> statuses = ConcurrentHashMap.newKeySet();
     private static Object mWaJobManager;
     private static Class<?> mSendReadClass;
     private static Method WaJobManagerMethod;
-    private static String currentJid;
+    private static FMessageWpp.UserJid currentJid;
     private static String currentScreen = "none";
-    private static final HashMap<String, ImageView> messageMap = new HashMap<>();
+    private final ConcurrentHashMap<String, WeakReference<ImageView>> messageMap = new ConcurrentHashMap<>();
 
     public SeenTick(@NonNull ClassLoader loader, @NonNull XSharedPreferences preferences) {
         super(loader, preferences);
@@ -62,14 +65,36 @@ public class SeenTick extends Feature {
 
     public static void setSeenButton(ImageView buttonImage, boolean b) {
         Drawable originalDrawable = DesignUtils.getDrawableByName("ic_notif_mark_read");
+        if (originalDrawable == null) {
+            buttonImage.setImageResource(Utils.getID("ic_notif_mark_read", "drawable"));
+            if (b) buttonImage.setColorFilter(Color.CYAN, PorterDuff.Mode.SRC_ATOP);
+            return;
+        }
+
         Drawable clonedDrawable;
 
         if (originalDrawable instanceof BitmapDrawable bitmapDrawable) {
             Bitmap bitmap = bitmapDrawable.getBitmap();
-            Bitmap clonedBitmap = bitmap.copy(bitmap.getConfig(), true);
+            Bitmap.Config config = bitmap.getConfig() != null ? bitmap.getConfig() : Bitmap.Config.ARGB_8888;
+            Bitmap clonedBitmap;
+            try {
+                clonedBitmap = bitmap.copy(config, true);
+            } catch (Exception ex) {
+                clonedBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                try {
+                    android.graphics.Canvas canvas = new android.graphics.Canvas(clonedBitmap);
+                    canvas.drawBitmap(bitmap, 0f, 0f, null);
+                } catch (Exception ignore) {
+                }
+            }
             clonedDrawable = new BitmapDrawable(buttonImage.getResources(), clonedBitmap);
         } else {
-            clonedDrawable = Objects.requireNonNull(originalDrawable.getConstantState()).newDrawable().mutate();
+            var cs = originalDrawable.getConstantState();
+            if (cs != null) {
+                clonedDrawable = cs.newDrawable().mutate();
+            } else {
+                clonedDrawable = originalDrawable.mutate();
+            }
         }
         if (b) {
             clonedDrawable.setColorFilter(Color.CYAN, PorterDuff.Mode.SRC_ATOP);
@@ -78,17 +103,23 @@ public class SeenTick extends Feature {
         buttonImage.postInvalidate();
     }
 
+    private void registerMessageView(String messageId, ImageView view) {
+        if (messageId == null || view == null) return;
+        messageMap.put(messageId, new WeakReference<>(view));
+    }
+
+    private ImageView getRegisteredView(String messageId) {
+        WeakReference<ImageView> ref = messageMap.get(messageId);
+        return ref == null ? null : ref.get();
+    }
+
     @Override
     public void doHook() throws Throwable {
 
 
-        var bubbleMethod = Unobfuscator.loadAntiRevokeBubbleMethod(classLoader);
-        logDebug(Unobfuscator.getMethodDescriptor(bubbleMethod));
-
-
         WaJobManagerMethod = Unobfuscator.loadBlueOnReplayWaJobManagerMethod(classLoader);
 
-        mSendReadClass = XposedHelpers.findClass("com.whatsapp.jobqueue.job.SendReadReceiptJob", classLoader);
+        mSendReadClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "SendReadReceiptJob");
 
         // hook instance of WaJobManager;
 
@@ -103,7 +134,7 @@ public class SeenTick extends Feature {
 
         WppCore.addListenerActivity((activity, type) -> {
             if (activity.getClass().getSimpleName().equals("Conversation") && (type == WppCore.ActivityChangeState.ChangeType.STARTED || type == WppCore.ActivityChangeState.ChangeType.RESUMED)) {
-                var jid = WppCore.getCurrentRawJID();
+                var jid = WppCore.getCurrentUserJid();
                 if (!Objects.equals(jid, currentJid)) {
                     currentJid = jid;
                 }
@@ -135,10 +166,9 @@ public class SeenTick extends Feature {
                     object = fmessageField.get(object);
                 }
                 var fMessage = new FMessageWpp(object);
-                var jid = WppCore.getRawString(fMessage.getUserJid());
                 statuses.clear();
                 statuses.add(fMessage);
-                currentJid = jid;
+                currentJid = fMessage.getUserJid();
                 currentScreen = "status";
             }
         });
@@ -195,22 +225,22 @@ public class SeenTick extends Feature {
                     buttonImage.setBackground(border);
                     contentView.setOrientation(LinearLayout.HORIZONTAL);
                     contentView.addView(buttonImage, 0);
-                    messageMap.put(key.messageID, buttonImage);
+                    registerMessageView(key.messageID, buttonImage);
                     buttonImage.setOnClickListener(v -> CompletableFuture.runAsync(() -> {
                         Utils.showToast(view.getContext().getString(ResId.string.sending_read_blue_tick), Toast.LENGTH_SHORT);
                         sendBlueTickStatus(currentJid);
-                        setSeenButton(buttonImage, true);
+                        buttonImage.post(() -> setSeenButton(buttonImage, true));
                     }));
                     CompletableFuture.runAsync(() -> {
                         var seen = MessageStore.getInstance().isReadMessageStatus(key.messageID);
-                        setSeenButton(buttonImage, seen);
+                        buttonImage.post(() -> setSeenButton(buttonImage, seen));
                     });
                 }
             });
         } else {
 
-            MenuStatus.menuStatuses.add(
-                    new MenuStatus.MenuItemStatus() {
+            MenuStatusListener.menuStatuses.add(
+                    new MenuStatusListener.onMenuItemStatusListener() {
                         @Override
                         public MenuItem addMenu(Menu menu, FMessageWpp fMessage) {
                             if (menu.findItem(ResId.string.send_blue_tick) != null) return null;
@@ -246,8 +276,8 @@ public class SeenTick extends Feature {
             }
         });
 
-        MenuStatus.menuStatuses.add(
-                new MenuStatus.MenuItemStatus() {
+        MenuStatusListener.menuStatuses.add(
+                new MenuStatusListener.onMenuItemStatusListener() {
                     @Override
                     public MenuItem addMenu(Menu menu, FMessageWpp fMessage) {
                         if (menu.findItem(ResId.string.read_all_mark_as_read) != null) return null;
@@ -272,7 +302,7 @@ public class SeenTick extends Feature {
                                 if (!fMessage.getKey().isFromMe) {
                                     statuses.add(fMessage);
                                 }
-                                var view = messageMap.get(messageId);
+                                var view = getRegisteredView(messageId);
                                 if (view != null) {
                                     view.post(() -> setSeenButton(view, true));
                                 }
@@ -307,17 +337,15 @@ public class SeenTick extends Feature {
                     }
                 }
                 FMessageWpp fMessage = new FMessageWpp(fmessageObj);
-                var id = fMessage.getMediaType();
-                // check media is view once
-                if (id != 42 && id != 43) return;
+                if (!fMessage.isViewOnce()) return;
                 Menu menu = (Menu) param.args[0];
                 MenuItem item = menu.add(0, 0, 0, ResId.string.send_blue_tick).setIcon(Utils.getID("ic_notif_mark_read", "drawable"));
                 if (ticktype == 1) item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
                 item.setOnMenuItemClickListener(item1 -> {
-                    var jid = WppCore.getRawString(fMessage.getKey().remoteJid);
+                    var userJid = fMessage.getKey().remoteJid;
                     var messageID = fMessage.getKey().messageID;
-                    MessageHistory.getInstance().updateViewedMessage(jid, messageID, MessageHistory.MessageType.VIEW_ONCE_TYPE, true);
-                    MessageHistory.getInstance().updateViewedMessage(jid, messageID, MessageHistory.MessageType.MESSAGE_TYPE, true);
+                    MessageHistory.getInstance().updateViewedMessage(userJid.getPhoneRawString(), messageID, MessageHistory.MessageType.VIEW_ONCE_TYPE, true);
+                    MessageHistory.getInstance().updateViewedMessage(userJid.getPhoneRawString(), messageID, MessageHistory.MessageType.MESSAGE_TYPE, true);
                     sendBlueTickMedia(fMessage);
                     statuses.clear();
                     Utils.showToast(Utils.getApplication().getString(ResId.string.sending_read_blue_tick), Toast.LENGTH_SHORT);
@@ -339,13 +367,11 @@ public class SeenTick extends Feature {
                                 var keyClass = FMessageWpp.Key.TYPE;
                                 var fieldType = ReflectionUtils.getFieldByType(param.thisObject.getClass(), keyClass);
                                 var keyMessage = ReflectionUtils.getObjectField(fieldType, param.thisObject);
-                                var fMessageObj = WppCore.getFMessageFromKey(keyMessage);
-                                if (fMessageObj == null) return;
-                                var fMessage = new FMessageWpp(fMessageObj);
-                                var jid = WppCore.getRawString(fMessage.getKey().remoteJid);
+                                var fMessage = new FMessageWpp.Key(keyMessage).getFMessage();
+                                var rawJid = fMessage.getKey().remoteJid.getPhoneRawString();
                                 var messageID = fMessage.getKey().messageID;
-                                MessageHistory.getInstance().updateViewedMessage(jid, messageID, MessageHistory.MessageType.VIEW_ONCE_TYPE, true);
-                                MessageHistory.getInstance().updateViewedMessage(jid, messageID, MessageHistory.MessageType.MESSAGE_TYPE, true);
+                                MessageHistory.getInstance().updateViewedMessage(rawJid, messageID, MessageHistory.MessageType.VIEW_ONCE_TYPE, true);
+                                MessageHistory.getInstance().updateViewedMessage(rawJid, messageID, MessageHistory.MessageType.MESSAGE_TYPE, true);
                                 sendBlueTickMedia(fMessage);
                                 statuses.clear();
                                 Utils.showToast(Utils.getApplication().getString(ResId.string.sending_read_blue_tick), Toast.LENGTH_SHORT);
@@ -362,7 +388,7 @@ public class SeenTick extends Feature {
 
     private void hookOnSendMessages() throws Exception {
         var messageJobMethod = Unobfuscator.loadBlueOnReplayMessageJobMethod(classLoader);
-        var messageSendClass = XposedHelpers.findClass("com.whatsapp.jobqueue.job.SendE2EMessageJob", classLoader);
+        var messageSendClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.Contains, "SendE2EMessageJob");
 
         XposedBridge.hookMethod(messageJobMethod, new XC_MethodHook() {
             @Override
@@ -370,33 +396,37 @@ public class SeenTick extends Feature {
                 if (!prefs.getBoolean("blueonreply", false)) return;
                 var obj = messageSendClass.cast(param.thisObject);
                 var rawJid = (String) XposedHelpers.getObjectField(obj, "jid");
+                var userJid = new FMessageWpp.UserJid(WppCore.createUserJid(rawJid));
 
-                if (Objects.equals(currentScreen, "status") && !rawJid.contains("status")) {
+                if (Objects.equals(currentScreen, "status") && !userJid.isStatus()) {
                     if (statuses.isEmpty()) return;
-                    MessageStore.getInstance().storeMessageRead(statuses.valueAt(0).getKey().messageID);
-                    var view = messageMap.get(statuses.valueAt(0).getKey().messageID);
+                    var first = statuses.stream().findFirst().orElse(null);
+                    if (first == null) return;
+                    MessageStore.getInstance().storeMessageRead(first.getKey().messageID);
+                    var view = getRegisteredView(first.getKey().messageID);
                     if (view != null) view.post(() -> setSeenButton(view, true));
                     sendBlueTickStatus(currentJid);
                 } else {
-                    sendBlueTick(rawJid);
+                    sendBlueTick(userJid);
                 }
                 HideSeenView.updateAllBubbleViews();
             }
         });
     }
 
-    private static void updateMessageStatusView(String jid, List<FMessageWpp> messages) {
+    private static void updateMessageStatusView(String rawJid, List<FMessageWpp> messages) {
         for (var msg : messages) {
-            MessageHistory.getInstance().updateViewedMessage(jid, msg.getKey().messageID, MessageHistory.MessageType.MESSAGE_TYPE, true);
+            MessageHistory.getInstance().updateViewedMessage(rawJid, msg.getKey().messageID, MessageHistory.MessageType.MESSAGE_TYPE, true);
         }
         HideSeenView.updateAllBubbleViews();
     }
 
-    private void sendBlueTick(String jid) {
+    private void sendBlueTick(FMessageWpp.UserJid userJid) {
         CompletableFuture.runAsync(() -> {
-            if (jid == null || jid.contains(Utils.getMyNumber())) return;
+            if (Objects.equals(userJid.getPhoneNumber(), Utils.getMyNumber()) || Objects.requireNonNullElse(userJid.getUserRawString(), "").contains("lid_me"))
+                return;
             var messages = new ArrayList<FMessageWpp>();
-            var hideSeenMessagesssages = MessageHistory.getInstance().getHideSeenMessages(currentJid, MessageHistory.MessageType.MESSAGE_TYPE, false);
+            var hideSeenMessagesssages = MessageHistory.getInstance().getHideSeenMessages(userJid.getPhoneRawString(), MessageHistory.MessageType.MESSAGE_TYPE, false);
             for (var message : hideSeenMessagesssages) {
                 var fmessage = message.getFMessage();
                 if (fmessage == null) continue;
@@ -406,59 +436,58 @@ public class SeenTick extends Feature {
                 return;
 
             if (prefs.getBoolean("hideaudioseen", false)) {
-                var audioMessages = messages.stream().filter(fMessageWpp -> fMessageWpp.getMediaType() == 2).collect(Collectors.toList());
-                for (var audioMessage : audioMessages) {
-                    sendBlueTickMedia(audioMessage);
+                for (var m : messages) {
+                    if (m.getMediaType() == 2) sendBlueTickMedia(m);
                 }
             }
-            sendBlueTickMsg(jid, messages);
-            updateMessageStatusView(jid,messages);
+            sendBlueTickMsg(userJid, messages);
+            updateMessageStatusView(userJid.getPhoneRawString(), messages);
         }, Utils.getExecutor());
     }
 
-    private void sendBlueTickMsg(String jid, ArrayList<FMessageWpp> messages) {
+    private void sendBlueTickMsg(FMessageWpp.UserJid userJid, ArrayList<FMessageWpp> messages) {
         if (messages.isEmpty())
             return;
         try {
-            HashMap<Object, List<String>> messageMap = new HashMap<>();
+            HashMap<FMessageWpp.UserJid, List<String>> groupedMap = new HashMap<>();
             for (FMessageWpp message : messages) {
-                var userJid = WppCore.isGroup(jid) ? message.getUserJid() : message.getKey().remoteJid;
-                messageMap.computeIfAbsent(userJid, k -> new ArrayList<>()).add(message.getKey().messageID);
+                var userJidMsg = userJid.isGroup() ? message.getUserJid() : message.getKey().remoteJid;
+                groupedMap.computeIfAbsent(userJidMsg, k -> new ArrayList<>()).add(message.getKey().messageID);
             }
-            var userJidTarget = WppCore.createUserJid(jid);
 
-            for (Map.Entry<Object, List<String>> entry : messageMap.entrySet()) {
-                var userJid = entry.getKey();
+            for (var entry : groupedMap.entrySet()) {
+                var userJidMsg = entry.getKey();
                 String[] messageIds = entry.getValue().toArray(new String[0]);
-                var participant = WppCore.isGroup(jid) ? userJid : null;
+                var participant = userJid.isGroup() ? userJidMsg.userJid : null;
 
-                WppCore.setPrivBoolean(messageIds[0] + "_rpass", true);
 
                 Object sendJob = XposedHelpers.newInstance(
-                        mSendReadClass, userJidTarget, participant, null, null, messageIds, -1, 1L, false
+                        mSendReadClass, userJid.userJid, participant, null, null, messageIds, -1, 1L, false
                 );
-
+                XposedHelpers.setAdditionalInstanceField(sendJob, "blue_on_reply", true);
                 WaJobManagerMethod.invoke(mWaJobManager, sendJob);
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             logDebug(e);
         }
     }
 
-    private void sendBlueTickStatus(String currentJid) {
+    private void sendBlueTickStatus(FMessageWpp.UserJid currentJid) {
         CompletableFuture.runAsync(() -> {
-            if (statuses.isEmpty() || currentJid == null || currentJid.equals("status_me")) return;
+            if (statuses.isEmpty() || currentJid == null || "status_me".equals(currentJid.getPhoneNumber()))
+                return;
             try {
                 var arr_s = statuses.stream().map(item -> item.getKey().messageID).toArray(String[]::new);
                 Arrays.stream(arr_s).forEach(s -> MessageStore.getInstance().storeMessageRead(s));
                 var userJidSender = WppCore.createUserJid("status@broadcast");
-                var userJid = WppCore.createUserJid(currentJid);
-                WppCore.setPrivBoolean(arr_s[0] + "_rpass", true);
-                var sendJob = XposedHelpers.newInstance(mSendReadClass, userJidSender, userJid, null, null, arr_s, -1, 0L, false);
-                WaJobManagerMethod.invoke(mWaJobManager, sendJob);
+
+                var sendJob2 = XposedHelpers.newInstance(mSendReadClass, userJidSender, currentJid.phoneJid, null, null, arr_s, -1, 0L, false);
+                XposedHelpers.setAdditionalInstanceField(sendJob2, "blue_on_reply", true);
+                WaJobManagerMethod.invoke(mWaJobManager, sendJob2);
+
                 statuses.clear();
-            } catch (Throwable e) {
-                XposedBridge.log("Error: " + e.getMessage());
+            } catch (Exception e) {
+                logDebug(e);
             }
         }, Utils.getExecutor());
     }
@@ -467,18 +496,17 @@ public class SeenTick extends Feature {
         CompletableFuture.runAsync(() -> {
             try {
                 var userJid = fMessage.getKey().remoteJid;
-                var rawJid = WppCore.getRawString(userJid);
                 Object participant = null;
-                if (WppCore.isGroup(rawJid)) {
-                    participant = fMessage.getUserJid();
+                if (userJid.isGroup()) {
+                    participant = fMessage.getUserJid().userJid;
                 }
-                var sendPlayerClass = XposedHelpers.findClass("com.whatsapp.jobqueue.job.SendPlayedReceiptJobV2", classLoader);
+                var sendPlayerClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.Contains, "SendPlayedReceiptJob");
                 var constructor = sendPlayerClass.getDeclaredConstructors()[0];
                 var classParticipantInfo = constructor.getParameterTypes()[0];
                 var rowsId = new Long[]{fMessage.getRowId()};
                 var messageId = fMessage.getKey().messageID;
                 constructor = classParticipantInfo.getDeclaredConstructors()[0];
-                var participantInfo = constructor.newInstance(userJid, participant, rowsId, new String[]{messageId});
+                var participantInfo = constructor.newInstance(userJid.userJid, participant, rowsId, new String[]{messageId});
                 var sendJob = XposedHelpers.newInstance(sendPlayerClass, participantInfo, false);
                 WaJobManagerMethod.invoke(mWaJobManager, sendJob);
             } catch (Throwable e) {

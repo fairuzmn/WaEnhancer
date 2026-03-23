@@ -16,6 +16,9 @@ import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.ResId;
 import com.wmods.wppenhacer.xposed.utils.Utils;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -23,6 +26,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -52,16 +56,19 @@ public class UnobfuscatorCache {
             long version = sPrefsCacheHooks.getLong("version", 0);
             long currentVersion = mApplication.getPackageManager().getPackageInfo(mApplication.getPackageName(), 0).getLongVersionCode();
             long savedUpdateTime = sPrefsCacheHooks.getLong("updateTime", 0);
+            String savedVersionName = sPrefsCacheHooks.getString("wae_version_name", "");
+            String versionName = BuildConfig.VERSION_NAME;
             long lastUpdateTime = savedUpdateTime;
             try {
                 lastUpdateTime = mApplication.getPackageManager().getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime;
             } catch (Exception ignored) {
             }
-            if (version != currentVersion || savedUpdateTime != lastUpdateTime) {
+            if (version != currentVersion || savedUpdateTime != lastUpdateTime || !versionName.equals(savedVersionName)) {
                 Utils.showToast(application.getString(ResId.string.starting_cache), Toast.LENGTH_LONG);
                 sPrefsCacheHooks.edit().clear().commit();
                 sPrefsCacheHooks.edit().putLong("version", currentVersion).commit();
                 sPrefsCacheHooks.edit().putLong("updateTime", lastUpdateTime).commit();
+                sPrefsCacheHooks.edit().putString("wae_version_name", versionName).commit();
                 if (version != currentVersion) {
                     sPrefsCacheStrings.edit().clear().commit();
                 }
@@ -74,7 +81,8 @@ public class UnobfuscatorCache {
     }
 
     public static void init(Application mApp) {
-        mInstance = new UnobfuscatorCache(mApp);
+        if (mInstance == null)
+            mInstance = new UnobfuscatorCache(mApp);
     }
 
     public static UnobfuscatorCache getInstance() {
@@ -196,10 +204,14 @@ public class UnobfuscatorCache {
         var methodName = getKeyName();
         String value = sPrefsCacheHooks.getString(methodName, null);
         if (value == null) {
-            Field result = functionCall.call();
-            if (result == null) throw new Exception("Field is null:" + methodName);
-            saveField(methodName, result);
-            return result;
+            try {
+                Field result = functionCall.call();
+                if (result == null) throw new NoSuchFieldException("Field is null");
+                saveField(methodName, result);
+                return result;
+            } catch (Exception e) {
+                throw new Exception("Error getting field " + methodName + ": " + e.getMessage(), e);
+            }
         }
         String[] ClassAndName = value.split(":");
         Class<?> cls = ReflectionUtils.findClass(ClassAndName[0], loader);
@@ -210,10 +222,14 @@ public class UnobfuscatorCache {
         var methodName = getKeyName();
         String value = sPrefsCacheHooks.getString(methodName, null);
         if (value == null) {
-            Field[] result = functionCall.call();
-            if (result == null) throw new Exception("Fields is null: " + methodName);
-            saveFields(methodName, result);
-            return result;
+            try {
+                Field[] result = functionCall.call();
+                if (result == null) throw new NoSuchFieldException("Fields is null");
+                saveFields(methodName, result);
+                return result;
+            } catch (Exception e) {
+                throw new Exception("Error getting fields " + methodName + ": " + e.getMessage(), e);
+            }
         }
         ArrayList<Field> fields = new ArrayList<>();
         String[] fieldsString = value.split("&");
@@ -229,10 +245,14 @@ public class UnobfuscatorCache {
         var methodName = getKeyName();
         String value = sPrefsCacheHooks.getString(methodName, null);
         if (value == null) {
-            Method result = functionCall.call();
-            if (result == null) throw new Exception("Method is null:" + methodName);
-            saveMethod(methodName, result);
-            return result;
+            try {
+                Method result = functionCall.call();
+                if (result == null) throw new NoSuchMethodException("Method is null");
+                saveMethod(methodName, result);
+                return result;
+            } catch (Exception e) {
+                throw new Exception("Error getting method " + methodName + ": " + e.getMessage(), e);
+            }
         }
         return getMethodFromString(loader, value);
     }
@@ -241,10 +261,14 @@ public class UnobfuscatorCache {
         var methodName = getKeyName();
         String value = sPrefsCacheHooks.getString(methodName, null);
         if (value == null) {
-            Method[] result = functionCall.call();
-            if (result == null) throw new Exception("Methods is null:" + methodName);
-            saveMethods(methodName, result);
-            return result;
+            try {
+                Method[] result = functionCall.call();
+                if (result == null) throw new NoSuchMethodException("Methods is null");
+                saveMethods(methodName, result);
+                return result;
+            } catch (Exception e) {
+                throw new Exception("Error getting methods " + methodName + ": " + e.getMessage(), e);
+            }
         }
         var methodStrings = value.split("&");
         ArrayList<Method> methods = new ArrayList<>();
@@ -275,10 +299,14 @@ public class UnobfuscatorCache {
     public Class<?> getClass(ClassLoader loader, String key, FunctionCall<Class<?>> functionCall) throws Exception {
         String value = sPrefsCacheHooks.getString(key, null);
         if (value == null) {
-            Class<?> result = functionCall.call();
-            if (result == null) throw new ClassNotFoundException("Class not found: " + key);
-            saveClass(key, result);
-            return result;
+            try {
+                Class<?> result = functionCall.call();
+                if (result == null) throw new ClassNotFoundException("Class is null");
+                saveClass(key, result);
+                return result;
+            } catch (Exception e) {
+                throw new Exception("Error getting class " + key + ": " + e.getMessage(), e);
+            }
         }
         return XposedHelpers.findClass(value, loader);
     }
@@ -287,10 +315,14 @@ public class UnobfuscatorCache {
         var methodName = getKeyName();
         String value = sPrefsCacheHooks.getString(methodName, null);
         if (value == null) {
-            Class<?>[] result = functionCall.call();
-            if (result == null) throw new Exception("Class is null: " + methodName);
-            saveClasses(methodName, result);
-            return result;
+            try {
+                Class<?>[] result = functionCall.call();
+                if (result == null) throw new ClassNotFoundException("Classes is null");
+                saveClasses(methodName, result);
+                return result;
+            } catch (Exception e) {
+                throw new Exception("Error getting classes " + methodName + ": " + e.getMessage(), e);
+            }
         }
         String[] classStrings = value.split("&");
         ArrayList<Class<?>> classes = new ArrayList<>();
@@ -299,6 +331,76 @@ public class UnobfuscatorCache {
         }
         return classes.toArray(new Class<?>[0]);
     }
+
+    public HashMap<String, Field> getMapField(ClassLoader loader, FunctionCall<HashMap<String, Field>> functionCall) throws Exception {
+        return getMapField(loader, getKeyName(), functionCall);
+    }
+
+    public HashMap<String, Field> getMapField(ClassLoader loader, String key, FunctionCall<HashMap<String, Field>> functionCall) throws Exception {
+        String value = sPrefsCacheHooks.getString(key, null);
+        if (value == null) {
+            try {
+                var result = functionCall.call();
+                if (result == null) throw new Exception("HashMap is null");
+                saveHashMap(key, result);
+                return result;
+            } catch (Exception e) {
+                throw new Exception("Error getting HashMap " + key + ": " + e.getMessage(), e);
+            }
+        }
+        return loadHashMap(loader, key);
+    }
+
+    private void saveHashMap(String key, HashMap<String, Field> map) {
+        // Cria um novo JSONObject para armazenar os pares
+        JSONObject jsonObject = new JSONObject();
+        for (Map.Entry<String, Field> entry : map.entrySet()) {
+            Field field = entry.getValue();
+            String value = field.getDeclaringClass().getName() + ":" + field.getName();
+            try {
+                jsonObject.put(entry.getKey(), value);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+        sPrefsCacheHooks.edit().putString(key, jsonObject.toString()).apply();
+    }
+
+    private HashMap<String, Field> loadHashMap(ClassLoader loader, String key) {
+        HashMap<String, Field> map = new HashMap<>();
+        String jsonString = sPrefsCacheHooks.getString(key, null);
+        if (jsonString == null) return map;
+
+        try {
+            JSONObject jsonObject = new JSONObject(jsonString);
+            Iterator<String> keys = jsonObject.keys();
+
+            while (keys.hasNext()) {
+                String mapKey = keys.next();
+                String value = jsonObject.getString(mapKey);
+
+                // Quebra "com.package.Classe:campo"
+                String[] parts = value.split(":");
+                if (parts.length == 2) {
+                    String className = parts[0];
+                    String fieldName = parts[1];
+                    try {
+                        Class<?> clazz = loader.loadClass(className);
+                        Field field = clazz.getDeclaredField(fieldName);
+                        field.setAccessible(true);
+                        map.put(mapKey, field);
+                    } catch (Exception e) {
+                        e.printStackTrace(); // ignora campos inválidos
+                    }
+                }
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return map;
+    }
+
 
     @SuppressWarnings("ApplySharedPref")
     public void saveField(String key, Field field) {
@@ -383,6 +485,49 @@ public class UnobfuscatorCache {
             value += ":" + Arrays.stream(constructor.getParameterTypes()).map(Class::getName).collect(Collectors.joining(","));
         }
         sPrefsCacheHooks.edit().putString(key, value).commit();
+    }
+
+    public Number getNumber(ClassLoader loader, FunctionCall<Number> functionCall) throws Exception {
+        var methodName = getKeyName();
+        String value = sPrefsCacheHooks.getString(methodName, null);
+        if (value == null) {
+            try {
+                Number result = functionCall.call();
+                if (result == null) throw new Exception("Number is null");
+                saveNumber(methodName, result);
+                return result;
+            } catch (Exception e) {
+                throw new Exception("Error getting number " + methodName + ": " + e.getMessage(), e);
+            }
+        }
+        return loadNumber(value);
+    }
+
+    @SuppressWarnings("ApplySharedPref")
+    private void saveNumber(String key, Number number) {
+        String value = number.getClass().getName() + ":" + number;
+        sPrefsCacheHooks.edit().putString(key, value).commit();
+    }
+
+    private Number loadNumber(String value) {
+        String[] parts = value.split(":", 2);
+        String className = parts.length == 2 ? parts[0] : Integer.class.getName();
+        String numberValue = parts.length == 2 ? parts[1] : value;
+
+        return switch (className) {
+            case "java.lang.Integer" -> Integer.valueOf(numberValue);
+            case "java.lang.Long" -> Long.valueOf(numberValue);
+            case "java.lang.Float" -> Float.valueOf(numberValue);
+            case "java.lang.Double" -> Double.valueOf(numberValue);
+            case "java.lang.Short" -> Short.valueOf(numberValue);
+            case "java.lang.Byte" -> Byte.valueOf(numberValue);
+            default -> {
+                if (numberValue.contains(".")) {
+                    yield Double.valueOf(numberValue);
+                }
+                yield Long.valueOf(numberValue);
+            }
+        };
     }
 
     public interface FunctionCall<T> {

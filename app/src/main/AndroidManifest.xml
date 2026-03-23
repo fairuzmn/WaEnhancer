@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -33,6 +34,7 @@
 
 
     <application
+        android:forceQueryable="true"
         android:name=".App"
         android:allowBackup="true"
         android:icon="@mipmap/launcher"
@@ -40,7 +42,7 @@
         android:requestLegacyExternalStorage="true"
         android:roundIcon="@mipmap/launcher"
         android:supportsRtl="true"
-        tools:targetApi="q">
+        tools:targetApi="30">
 
         <!--suppress AndroidDomInspection -->
         <service
@@ -56,6 +58,11 @@
                 android:value="" />
         </service>
 
+
+        <provider
+            android:name=".provider.DeletedMessagesProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="true" />
 
         <activity
             android:name=".activities.MainActivity"
@@ -83,10 +90,36 @@
             android:theme="@style/AppTheme" />
 
         <activity
+            android:name=".activities.CallRecordingSettingsActivity"
+            android:theme="@style/Theme.Material3.DynamicColors.DayNight.NoActionBar"
+            android:parentActivityName=".activities.MainActivity" />
+
+        <activity
+            android:name=".activities.SearchActivity"
+            android:theme="@style/AppTheme"
+            android:parentActivityName=".activities.MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".activities.DeletedMessagesActivity"
+            android:theme="@style/AppTheme"
+            android:parentActivityName=".activities.MainActivity" />
+
+        <activity
+            android:name=".activities.MessageListActivity"
+            android:theme="@style/AppTheme"
+            android:parentActivityName=".activities.DeletedMessagesActivity" />
+
+        <activity
             android:name=".activities.ForceStartActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
 
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -109,6 +142,16 @@
             android:name=".xposed.bridge.service.BridgeService"
             android:exported="true"
             tools:ignore="ExportedService" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <provider
             android:name=".xposed.bridge.providers.HookProvider"
@@ -140,6 +183,7 @@
             tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="com.facebook.GET_PHONE_ID" />
+                <action android:name="android.support.customtabs.action.CustomTabsService"/>
             </intent-filter>
         </receiver>
 
