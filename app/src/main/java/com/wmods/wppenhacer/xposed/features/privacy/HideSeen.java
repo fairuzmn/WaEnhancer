@@ -74,7 +74,6 @@ public class HideSeen extends Feature {
     private void hookSendReadReceiptJob() throws Exception {
         Method sendReadReceiptJobMethod = Unobfuscator.loadHideViewSendReadJob(classLoader);
         Class<?> sendJobClass = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "SendReadReceiptJob");
-        log(Unobfuscator.getMethodDescriptor(sendReadReceiptJobMethod));
 
         XposedBridge.hookMethod(sendReadReceiptJobMethod, new XC_MethodHook() {
             @Override
@@ -151,6 +150,7 @@ public class HideSeen extends Feature {
         String[] messageIds = (String[]) XposedHelpers.getObjectField(sendReadReceiptJob, "messageIds");
         for (String messageId : messageIds) {
             FMessageWpp fMessage = new FMessageWpp.Key(messageId, userJid, false).getFMessage();
+            if (fMessage == null) continue;
             MessageHistory.MessageType type = fMessage.isViewOnce()
                     ? MessageHistory.MessageType.VIEW_ONCE_TYPE
                     : MessageHistory.MessageType.MESSAGE_TYPE;
@@ -163,10 +163,6 @@ public class HideSeen extends Feature {
         Method receiptMethod = Unobfuscator.loadReceiptMethod(classLoader);
         Method hideViewInChatMethod = Unobfuscator.loadHideViewInChatMethod(classLoader);
         Method outsideMethod = Unobfuscator.loadReceiptOutsideChat(classLoader);
-
-        logDebug("ReceiptMethod", Unobfuscator.getMethodDescriptor(receiptMethod));
-        logDebug("Inside Chat", Unobfuscator.getMethodDescriptor(hideViewInChatMethod));
-        logDebug("Outside Chat", Unobfuscator.getMethodDescriptor(outsideMethod));
 
         XposedBridge.hookMethod(receiptMethod, new XC_MethodHook() {
             @Override

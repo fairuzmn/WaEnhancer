@@ -5,7 +5,6 @@ import static de.robv.android.xposed.XposedHelpers.getObjectField;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.BaseAdapter;
 
@@ -16,16 +15,15 @@ import com.wmods.wppenhacer.xposed.core.WppCore;
 import com.wmods.wppenhacer.xposed.core.db.MessageStore;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache;
-import com.wmods.wppenhacer.xposed.utils.DebugUtils;
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils;
 import com.wmods.wppenhacer.xposed.utils.Utils;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -55,7 +53,7 @@ public class SeparateGroup extends Feature {
         if (!prefs.getBoolean("separategroups", false)) return;
 
         // Modifying tab list order
-        hookTabList(homeActivityClass);
+        hookTabList();
 
         // Setting group icon
         hookTabIcon();
@@ -173,7 +171,6 @@ public class SeparateGroup extends Feature {
     @SuppressLint("ResourceType")
     private void hookTabName() throws Exception {
         var tabNameMethod = Unobfuscator.loadTabNameMethod(classLoader);
-        logDebug("TAB NAME", Unobfuscator.getMethodDescriptor(tabNameMethod));
         XposedBridge.hookMethod(tabNameMethod, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
@@ -292,18 +289,15 @@ public class SeparateGroup extends Feature {
         return editableChatList;
     }
 
-    private void hookTabList(@NonNull Class<?> home) throws Exception {
+    private void hookTabList() throws Exception {
         var onCreateTabList = Unobfuscator.loadTabListMethod(classLoader);
         logDebug(Unobfuscator.getMethodDescriptor(onCreateTabList));
-        var fieldTabsList = ReflectionUtils.getFieldByExtendType(home, List.class);
-        if (fieldTabsList == null) {
-            throw new NullPointerException("fieldTabList is NULL!");
-        }
+        var fieldTabsList = loadTabListField(classLoader);
+
         XposedBridge.hookMethod(onCreateTabList, new XC_MethodHook() {
             @Override
-            @SuppressWarnings("unchecked")
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                tabs = (ArrayList<Integer>) fieldTabsList.get(null);
+                tabs = getArrayListTab(fieldTabsList);
                 if (tabs == null) return;
                 if (!prefs.getBoolean("separategroups", false)) return;
                 if (!tabs.contains(GROUPS)) {
@@ -361,5 +355,26 @@ public class SeparateGroup extends Feature {
             return true;
         }
     }
+
+    public static Field loadTabListField(ClassLoader classLoader) throws Exception {
+        try {
+            return Unobfuscator.loadHomeTabBarDelegateListField(classLoader);
+        } catch (Exception ignored) {
+            return Unobfuscator.loadHomeTabListField(classLoader);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static ArrayList<Integer> getArrayListTab(Field listField) throws Exception {
+        var list = (List<Integer>) listField.get(null);
+        if (list instanceof ArrayList<Integer> arrayList) {
+            return arrayList;
+        } else {
+            var tabs = new ArrayList<>(list);
+            listField.set(null, tabs);
+            return tabs;
+        }
+    }
+
 
 }

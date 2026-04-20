@@ -51,23 +51,12 @@ public class DownloadViewOnce extends Feature {
                 @Override
                 @SuppressLint("DiscouragedApi")
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    var fmessageField = ReflectionUtils.getFieldByExtendType(param.thisObject.getClass(), FMessageWpp.TYPE);
-                    Object fmessageObj = null;
-                    if (fmessageField != null) {
-                        fmessageObj = fmessageField.get(param.thisObject);
-                    }
-                    if (fmessageObj == null) {
-                        var keyField = ReflectionUtils.getFieldByExtendType(param.thisObject.getClass(), FMessageWpp.Key.TYPE);
-                        if (keyField != null) {
-                            var keyObj = keyField.get(param.thisObject);
-                            fmessageObj = WppCore.getFMessageFromKey(keyObj);
-                        }
-                    }
+                    var fmessageObj = ReflectionUtils.getArg(param.args, FMessageWpp.TYPE, 0);
                     FMessageWpp fMessage = new FMessageWpp(fmessageObj);
 
                     // check media is view once
                     if (!fMessage.isViewOnce()) return;
-                    Menu menu = (Menu) param.args[0];
+                    Menu menu = ReflectionUtils.getArg(param.args, Menu.class, 0);
                     MenuItem item = menu.add(0, 0, 0, ResId.string.download).setIcon(ResId.drawable.download);
                     item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
                     item.setOnMenuItemClickListener(item1 -> {
