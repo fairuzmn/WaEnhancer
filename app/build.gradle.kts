@@ -1,5 +1,6 @@
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.FileInputStream
 import java.util.Locale
 import java.util.Properties
@@ -8,6 +9,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.materialthemebuilder)
     alias(libs.plugins.kotlinAndroid)
+    alias(libs.plugins.kspPlugin)
 }
 
 fun getGitHashCommit(): String {
@@ -128,6 +130,7 @@ android {
         viewBinding = true
         buildConfig = true
         aidl = true
+        resValues = true
     }
 
 
@@ -160,11 +163,18 @@ android {
 
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     implementation(libs.colorpicker)
     implementation(files("libs/dexkit-android.aar"))
     implementation(libs.flatbuffers)
     compileOnly(libs.libxposed.legacy)
+    ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.activity)
     implementation(libs.androidx.documentfile)
@@ -172,6 +182,7 @@ dependencies {
     implementation(libs.androidx.fragment)
     implementation(libs.androidx.navigation.fragment)
     implementation(libs.androidx.navigation.ui)
+    implementation(libs.androidx.room.runtime)
     implementation(libs.rikkax.appcompat)
     implementation(libs.rikkax.core)
     implementation(libs.material)
@@ -189,8 +200,8 @@ dependencies {
     implementation(libs.markwon.core)
 }
 
+
 configurations.all {
-    exclude("org.jetbrains", "annotations")
     exclude("androidx.appcompat", "appcompat")
     exclude("org.jetbrains.kotlin", "kotlin-stdlib-jdk7")
     exclude("org.jetbrains.kotlin", "kotlin-stdlib-jdk8")

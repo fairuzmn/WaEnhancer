@@ -131,14 +131,14 @@
     </string-array>
     <string-array name="call_type_buttons">
         <item>@string/call_type_buttons_no_internet</item>
-        <item>@string/call_type_buttons_declined</item>
+        <item>@string/call_type_buttons_busy</item>
         <item>@string/call_type_buttons_ended</item>
         <item>@string/call_type_buttons_uncallable</item>
     </string-array>
 
     <string-array name="call_type_values">
         <item>no_internet</item>
-        <item>declined</item>
+        <item>busy</item>
         <item>ended</item>
         <item>uncallable</item>
     </string-array>
@@ -154,22 +154,20 @@
         <item>2</item>
     </string-array>
     <string-array name="supported_versions_wpp">
-        <item>2.26.8.xx</item>
-        <item>2.26.9.xx</item>
-        <item>2.26.10.xx</item>
-        <item>2.26.11.xx</item>
-        <item>2.26.12.xx</item>
-        <item>2.26.13.xx</item>
         <item>2.26.14.xx</item>
+        <item>2.26.15.xx</item>
+        <item>2.26.16.xx</item>
+        <item>2.26.17.xx</item>
+        <item>2.26.18.xx</item>
+        <item>2.26.19.xx</item>
     </string-array>
     <string-array name="supported_versions_business">
-        <item>2.26.8.xx</item>
-        <item>2.26.9.xx</item>
-        <item>2.26.10.xx</item>
-        <item>2.26.11.xx</item>
-        <item>2.26.12.xx</item>
-        <item>2.26.13.xx</item>
         <item>2.26.14.xx</item>
+        <item>2.26.15.xx</item>
+        <item>2.26.16.xx</item>
+        <item>2.26.17.xx</item>
+        <item>2.26.18.xx</item>
+        <item>2.26.19.xx</item>
     </string-array>
     <string-array name="image_picker">
         <item>image/*</item>
@@ -228,5 +226,4 @@
         <item>1</item>
         <item>2</item>
     </string-array>
-
 </resources>
