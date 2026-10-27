@@ -41,11 +41,6 @@
         app:iconSpaceReserved="false"
         app:title="@string/conversation">
 
-        <Preference
-            app:key="open_deleted_messages"
-            app:title="@string/deleted_messages_title"
-            app:summary="@string/deleted_messages_sum" />
-
         <ListPreference
             app:defaultValue="0"
             app:entries="@array/custom_privacy_entries"
@@ -85,6 +80,11 @@
             app:key="hidereceipt"
             app:summary="@string/hidereceipt_sum"
             app:title="@string/hidereceipt" />
+
+        <rikka.material.preference.MaterialSwitchPreference
+            app:key="hidereceipt_unknown"
+            app:summary="@string/hide_delivered_unknown_sum"
+            app:title="@string/hide_delivered_unknown" />
 
         <rikka.material.preference.MaterialSwitchPreference
             app:key="ghostmode_t"

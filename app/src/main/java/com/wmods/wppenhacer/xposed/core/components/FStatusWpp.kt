@@ -1,11 +1,12 @@
 package com.wmods.wppenhacer.xposed.core.components
 
+import com.highcapable.kavaref.KavaRef.Companion.resolve
+import com.highcapable.yukihookapi.extension.kavaref.hookAll
+import com.highcapable.yukihookapi.hook.param.PackageParam
 import com.wmods.wppenhacer.xposed.core.WppCore
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
+import com.wmods.wppenhacer.xposed.utils.YukiLog
 import java.io.File
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -23,20 +24,20 @@ class FStatusWpp(val fstatus: Any?) {
         private var mStatusStore: Any? = null
 
         @JvmStatic
-        fun initialize(classLoader: ClassLoader) {
-            FStatusKey.initialize(classLoader)
-            TYPE = Unobfuscator.loadFStatusClass(classLoader)
-            val fStatusKeyClass = Unobfuscator.loadFStatusKeyClass(classLoader)
-            fieldFStatusKey = ReflectionUtils.getFieldByType(TYPE, fStatusKeyClass)!!
-            methodGetStatusByKey = Unobfuscator.loadGetStatusByKey(classLoader)
-            XposedBridge.hookAllConstructors(
-                methodGetStatusByKey.declaringClass,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        mStatusStore = param.thisObject
+        fun initialize(packageParam: PackageParam, classLoader: ClassLoader) {
+            packageParam.apply {
+                FStatusKey.initialize(classLoader)
+                TYPE = Unobfuscator.loadFStatusClass(classLoader)
+                val fStatusKeyClass = Unobfuscator.loadFStatusKeyClass(classLoader)
+                fieldFStatusKey = ReflectionUtils.getFieldByType(TYPE, fStatusKeyClass)!!
+                methodGetStatusByKey = Unobfuscator.loadGetStatusByKey(classLoader)
+                methodGetStatusByKey.declaringClass.resolve().constructor { }.hookAll {
+                    after {
+                        mStatusStore = instance
                     }
-                })
-            classFMediaStatus = Unobfuscator.loadFMediaStatusClass(classLoader)
+                }
+                classFMediaStatus = Unobfuscator.loadFMediaStatusClass(classLoader)
+            }
         }
 
         @JvmStatic
@@ -48,7 +49,7 @@ class FStatusWpp(val fstatus: Any?) {
                 }
                 return FStatusWpp(methodGetStatusByKey.invoke(mStatusStore, fStatusKey.thisObject))
             } catch (e: Exception) {
-                XposedBridge.log(e)
+                YukiLog.log(e)
             }
             return null
         }
@@ -72,22 +73,44 @@ class FStatusWpp(val fstatus: Any?) {
     }
 
 
-
     val fMessage: FMessageWpp? by lazy {
         try {
             FMessageWpp(WppCore.getFMessageFromFStatus(fstatus))
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
             null
+        }
+    }
+
+    private val mediaFileAccessor: Pair<Field, Method>? by lazy {
+        classFMediaStatus.declaredFields.firstNotNullOfOrNull { field ->
+            field.isAccessible = true
+
+            val method = field.type.declaredMethods.firstOrNull {
+                it.returnType == File::class.java
+            }
+
+            if (method != null) {
+                method.isAccessible = true
+                Pair(field, method)
+            } else {
+                null
+            }
         }
     }
 
     fun getMediaFile(): File? {
         if (!isMediaFile) return null
-        val item = classFMediaStatus.getField("A00").get(fstatus) ?: return null
-        return item.javaClass.declaredMethods.first {
-            it.returnType == File::class.java
-        }.apply { isAccessible = true }.invoke(item) as? File
+
+        val (field, method) = mediaFileAccessor ?: run {
+            YukiLog.log("Media file accessor not found for FStatus class: ${classFMediaStatus.name}")
+            return null
+        }
+
+        val item = field.get(fstatus) ?: return null
+        return runCatching {
+            method.invoke(item) as? File
+        }.getOrNull()
     }
 
     override fun toString(): String {
@@ -149,17 +172,17 @@ class FStatusWpp(val fstatus: Any?) {
                     FMessageWpp.Key(it.get(thisObject))
                 }
             } catch (e: Exception) {
-                XposedBridge.log(e)
+                YukiLog.log(e)
                 FMessageWpp.Key(null)
             }
         }
 
         constructor(key: Any?) {
             this.thisObject = key
-            this.senderJid = FMessageWpp.UserJid(XposedHelpers.getObjectField(key, "A01"))
-            this.messageID = XposedHelpers.getObjectField(key, "A02") as String
-            this.isFromMe = XposedHelpers.getBooleanField(key, "A03")
-            this.remoteJid = FMessageWpp.UserJid(XposedHelpers.getObjectField(key, "A00"))
+            this.senderJid = FMessageWpp.UserJid(ReflectionUtils.getObjectField(key, "A01"))
+            this.messageID = ReflectionUtils.getObjectField(key, "A02") as String
+            this.isFromMe = ReflectionUtils.getBooleanField(key, "A03")
+            this.remoteJid = FMessageWpp.UserJid(ReflectionUtils.getObjectField(key, "A00"))
             this.fStatus = getFStatusFromFKeyStatus(this)
         }
 

@@ -4,9 +4,8 @@ import android.annotation.SuppressLint
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.text.TextUtils
-import androidx.core.database.sqlite.transaction
 import com.wmods.wppenhacer.xposed.utils.Utils
-import de.robv.android.xposed.XposedBridge
+import com.wmods.wppenhacer.xposed.utils.YukiLog
 import java.io.File
 import java.util.stream.Collectors
 
@@ -15,12 +14,13 @@ class MessageStore private constructor() {
     private var sqLiteDatabase: SQLiteDatabase? = null
 
     init {
-        val dbFile = File(Utils.getApplication().filesDir.parentFile, "/databases/msgstore.db")
+        val dataDir = Utils.getAccountDataDir()
+        val dbFile = File(dataDir, "/databases/msgstore.db")
         if (dbFile.exists()) {
             sqLiteDatabase = SQLiteDatabase.openDatabase(
                 dbFile.absolutePath,
                 null,
-                SQLiteDatabase.OPEN_READWRITE
+                SQLiteDatabase.OPEN_READONLY
             )
         }
     }
@@ -54,7 +54,7 @@ class MessageStore private constructor() {
                     }
                 }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         }
         return message
     }
@@ -71,7 +71,7 @@ class MessageStore private constructor() {
                 }
             }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         }
         return ""
     }
@@ -88,7 +88,7 @@ class MessageStore private constructor() {
                 }
             }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         }
         return -1
     }
@@ -106,7 +106,7 @@ class MessageStore private constructor() {
                     }
                 }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         }
         return null
     }
@@ -123,7 +123,7 @@ class MessageStore private constructor() {
                 }
             }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         }
         return ""
     }
@@ -140,7 +140,7 @@ class MessageStore private constructor() {
                 }
             }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         }
         return message
     }
@@ -165,29 +165,63 @@ class MessageStore private constructor() {
                 }
             }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         }
 
         return list
     }
 
     @Synchronized
-    fun executeSQL(sql: String) {
-        try {
-            sqLiteDatabase?.execSQL(sql)
-        } catch (e: Exception) {
-            XposedBridge.log(e)
+    fun executeWritableSQL(sql: String, maxRetries: Int = 3, retryDelayMs: Long = 500L) {
+        val dataDir = Utils.getAccountDataDir()
+        val dbFile = File(dataDir, "/databases/msgstore.db")
+        if (!dbFile.exists()) return
+
+        var retries = 0
+        while (retries < maxRetries) {
+            var writeDb: SQLiteDatabase? = null
+            try {
+                writeDb = SQLiteDatabase.openDatabase(
+                    dbFile.absolutePath,
+                    null,
+                    SQLiteDatabase.OPEN_READWRITE
+                )
+                try {
+                    writeDb.rawQuery("PRAGMA busy_timeout = 3000;", null).close()
+                } catch (ignored: Exception) {
+                }
+
+                writeDb.execSQL(sql)
+                return
+            } catch (e: Exception) {
+                if (e is android.database.sqlite.SQLiteDatabaseLockedException ||
+                    e is android.database.sqlite.SQLiteTableLockedException
+                ) {
+                    retries++
+                    if (retries >= maxRetries) {
+                        YukiLog.log(e)
+                    } else {
+                        try {
+                            Thread.sleep(retryDelayMs * retries)
+                        } catch (ignored: InterruptedException) {
+                        }
+                    }
+                } else {
+                    YukiLog.log(e)
+                    return
+                }
+            } finally {
+                try {
+                    writeDb?.close()
+                } catch (ignored: Exception) {
+                }
+            }
         }
     }
 
     fun storeMessageRead(messageId: String) {
-        val db = sqLiteDatabase ?: return
-        XposedBridge.log("storeMessageRead: $messageId")
-        try {
-            db.execSQL("UPDATE message SET status = 1 WHERE key_id = \"$messageId\"")
-        } catch (e: Exception) {
-            XposedBridge.log(e)
-        }
+        YukiLog.log("storeMessageRead: $messageId")
+        executeWritableSQL("UPDATE message SET status = 1 WHERE key_id = \"$messageId\"")
     }
 
     fun isReadMessageStatus(messageId: String): Boolean {
@@ -204,11 +238,31 @@ class MessageStore private constructor() {
                 result = cursor.getInt(cursor.getColumnIndexOrThrow("status")) == 1
             }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         } finally {
             cursor?.close()
         }
         return result
+    }
+
+    private var writableDatabase: SQLiteDatabase? = null
+
+    /**
+     * Separate read-write connection, only meant for restoring deleted messages. The default
+     * connection stays read-only so the other features can't write to msgstore by accident.
+     */
+    @Synchronized
+    fun getWritableDatabase(): SQLiteDatabase? {
+        writableDatabase?.takeIf { it.isOpen }?.let { return it }
+        val dbFile = File(Utils.getAccountDataDir(), "/databases/msgstore.db")
+        if (!dbFile.exists()) return null
+        return try {
+            SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+                .also { writableDatabase = it }
+        } catch (e: Exception) {
+            YukiLog.log(e)
+            null
+        }
     }
 
     fun getDatabase(): SQLiteDatabase? {
@@ -251,17 +305,144 @@ class MessageStore private constructor() {
                 }
             }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         }
         return null
     }
 
+    fun deleteStatusByMessageKey(messageKey: String?, callback: ((Boolean) -> Unit)? = null) {
+        Utils.databaseExecutor.execute {
+            val result = deleteStatusByMessageKeySync(messageKey)
+            callback?.invoke(result)
+        }
+    }
+
     @Synchronized
-    fun deleteStatusByMessageKey(messageKey: String?): Boolean {
-        val db = sqLiteDatabase
-        if (db == null || messageKey.isNullOrEmpty()) {
+    private fun deleteStatusByMessageKeySync(messageKey: String?): Boolean {
+        if (messageKey.isNullOrEmpty()) {
             return false
         }
+        val dbFile = File(Utils.application.filesDir.parentFile, "/databases/status.db")
+        val statusDbInstance: SQLiteDatabase? = if (dbFile.exists()) {
+            try {
+                SQLiteDatabase.openDatabase(
+                    dbFile.absolutePath,
+                    null,
+                    SQLiteDatabase.OPEN_READWRITE
+                )
+            } catch (e: Exception) {
+                YukiLog.log(e)
+                null
+            }
+        } else {
+            null
+        }
+
+        if (statusDbInstance != null && statusDbInstance.isOpen) {
+            try {
+                var statusRowId: Long? = null
+                var mediaFilePath: String? = null
+
+                try {
+                    statusDbInstance.query(
+                        "status",
+                        arrayOf("row_id"),
+                        "uuid=?",
+                        arrayOf(messageKey),
+                        null,
+                        null,
+                        null
+                    ).use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            statusRowId = cursor.getLong(0)
+                        }
+                    }
+                } catch (e: Exception) {
+                    YukiLog.log(e)
+                }
+
+                if (statusRowId != null) {
+                    try {
+                        statusDbInstance.rawQuery(
+                            "SELECT st.thumbnail_path, mc.file_path " +
+                                    "FROM status_thumbnail st " +
+                                    "LEFT JOIN media_content mc ON st.media_content_row_id = mc.row_id " +
+                                    "WHERE st.status_row_id = ? LIMIT 1",
+                            arrayOf(statusRowId.toString())
+                        ).use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val thumbPath = if (cursor.isNull(0)) null else cursor.getString(0)
+                                val mcPath = if (cursor.isNull(1)) null else cursor.getString(1)
+                                mediaFilePath = when {
+                                    !thumbPath.isNullOrEmpty() -> thumbPath
+                                    !mcPath.isNullOrEmpty() -> mcPath
+                                    else -> null
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        YukiLog.log(e)
+                    }
+
+                    if (mediaFilePath.isNullOrEmpty()) {
+                        try {
+                            statusDbInstance.rawQuery(
+                                "SELECT mc.file_path " +
+                                        "FROM status_media_link sml " +
+                                        "JOIN media_content mc ON sml.media_content_row_id = mc.row_id " +
+                                        "WHERE sml.status_row_id = ? LIMIT 1",
+                                arrayOf(statusRowId.toString())
+                            ).use { cursor ->
+                                if (cursor.moveToFirst()) {
+                                    mediaFilePath =
+                                        if (cursor.isNull(0)) null else cursor.getString(0)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            YukiLog.log(e)
+                        }
+                    }
+
+                    var deleted = false
+                    try {
+                        deleted = statusDbInstance.delete(
+                            "status",
+                            "row_id=?",
+                            arrayOf(statusRowId.toString())
+                        ) > 0
+                    } catch (e: Exception) {
+                        YukiLog.log(e)
+                    }
+
+                    if (deleted) {
+                        deleteStatusMediaFile(mediaFilePath)
+                        return true
+                    }
+                }
+            } finally {
+                try {
+                    statusDbInstance.close()
+                } catch (e: Exception) {
+                    YukiLog.log(e)
+                }
+            }
+        }
+
+        val msgStoreFile = File(Utils.application.filesDir.parentFile, "/databases/msgstore.db")
+        val writeDb = if (msgStoreFile.exists()) {
+            try {
+                SQLiteDatabase.openDatabase(
+                    msgStoreFile.absolutePath,
+                    null,
+                    SQLiteDatabase.OPEN_READWRITE
+                )
+            } catch (e: Exception) {
+                YukiLog.log(e)
+                null
+            }
+        } else {
+            null
+        } ?: return false
 
         var messageRowId: Long? = null
         var senderJidRowId: Long? = null
@@ -269,53 +450,57 @@ class MessageStore private constructor() {
         var mediaFilePath: String? = null
         var deleted = false
 
-        db.transaction {
+        try {
             try {
-                try {
-                    rawQuery(
-                        "SELECT _id, sender_jid_row_id, chat_row_id " +
-                                "FROM message " +
-                                "WHERE key_id=? AND from_me=0 " +
-                                "ORDER BY _id DESC LIMIT 1",
-                        arrayOf(messageKey)
-                    ).use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            messageRowId = if (cursor.isNull(0)) null else cursor.getLong(0)
-                            senderJidRowId = if (cursor.isNull(1)) null else cursor.getLong(1)
-                            chatRowId = if (cursor.isNull(2)) null else cursor.getLong(2)
-                        }
+                writeDb.rawQuery(
+                    "SELECT _id, sender_jid_row_id, chat_row_id " +
+                            "FROM message " +
+                            "WHERE key_id=? AND from_me=0 " +
+                            "ORDER BY _id DESC LIMIT 1",
+                    arrayOf(messageKey)
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        messageRowId = if (cursor.isNull(0)) null else cursor.getLong(0)
+                        senderJidRowId = if (cursor.isNull(1)) null else cursor.getLong(1)
+                        chatRowId = if (cursor.isNull(2)) null else cursor.getLong(2)
                     }
-                } catch (e: Exception) {
-                    XposedBridge.log(e)
                 }
-
-                if (messageRowId == null || senderJidRowId == null || chatRowId == null) {
-                    return false
-                }
-
-                try {
-                    rawQuery(
-                        "SELECT file_path FROM message_media WHERE message_row_id=? LIMIT 1",
-                        arrayOf(messageRowId.toString())
-                    ).use { mediaCursor ->
-                        if (mediaCursor.moveToFirst()) {
-                            mediaFilePath = mediaCursor.getString(0)
-                        }
-                    }
-                } catch (e: Exception) {
-                    XposedBridge.log(e)
-                }
-
-                deleted = delete("message", "_id=?", arrayOf(messageRowId.toString())) > 0
-                if (!deleted) {
-                    return false
-                }
-
-                refreshStatusRow(senderJidRowId!!, chatRowId!!)
             } catch (e: Exception) {
-                XposedBridge.log(e)
+                YukiLog.log(e)
+            }
+
+            if (messageRowId == null || senderJidRowId == null || chatRowId == null) {
+                return false
+            }
+
+            try {
+                writeDb.rawQuery(
+                    "SELECT file_path FROM message_media WHERE message_row_id=? LIMIT 1",
+                    arrayOf(messageRowId.toString())
+                ).use { mediaCursor ->
+                    if (mediaCursor.moveToFirst()) {
+                        mediaFilePath = mediaCursor.getString(0)
+                    }
+                }
+            } catch (e: Exception) {
+                YukiLog.log(e)
+            }
+
+            try {
+                deleted = writeDb.delete("message", "_id=?", arrayOf(messageRowId.toString())) > 0
+            } catch (e: Exception) {
+                YukiLog.log(e)
                 deleted = false
-            } finally {
+            }
+
+            if (deleted) {
+                refreshStatusRow(writeDb, senderJidRowId!!, chatRowId!!)
+            }
+        } finally {
+            try {
+                writeDb.close()
+            } catch (e: Exception) {
+                YukiLog.log(e)
             }
         }
 
@@ -326,8 +511,7 @@ class MessageStore private constructor() {
         return deleted
     }
 
-    private fun refreshStatusRow(senderJidRowId: Long, chatRowId: Long) {
-        val db = sqLiteDatabase ?: return
+    private fun refreshStatusRow(db: SQLiteDatabase, senderJidRowId: Long, chatRowId: Long) {
         var latestMessageId: Long = -1
         var latestTimestamp: Long = 0
         var totalCount = 0
@@ -362,7 +546,7 @@ class MessageStore private constructor() {
                 }
             }
         } catch (e: Exception) {
-            XposedBridge.log(e)
+            YukiLog.log(e)
         }
 
         if (totalCount == 0) {
@@ -424,7 +608,7 @@ class MessageStore private constructor() {
         }
 
         val candidates = ArrayList<File>()
-        val app = Utils.getApplication()
+        val app = Utils.application
         val appName = app.applicationInfo.loadLabel(app.packageManager).toString()
         val mediaDirs = app.externalMediaDirs
 

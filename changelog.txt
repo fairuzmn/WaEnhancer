@@ -1,10 +1,12 @@
-[ADDED]
-* Added new call blocking type: Busy (On another call).
+[NEW]
+* Root Diagnostics now detects when the Magisk DenyList is blocking WhatsApp/Business and can remove them from it with one tap
 
-[REMOVED]
-* Removed the "Rejected" type call blocking, it was not working.
+[IMPROVED]
+* Crash logs are now easier to read, since class and method names are no longer obfuscated
 
 [FIXED]
-* Fixed the Settings icon with profile photo on the home screen (now the camera button also appears)
-* Fixed problem with call blocker for unknown numbers
-* Fixed the logic to hide the ticks
+* Fixed the Text Status Composer color picker on WhatsApp 2.26.41.xx
+* Fixed IG Status on WhatsApp 2.26.41.xx
+* Fixed Remove Forward Limit on newer WhatsApp versions, which now also removes the limits for frequently forwarded messages to groups and for sharing to multiple channels
+* Fixed a "failed to hook Flyme checkDowngrade" error appearing in the LSPosed log on non-Flyme devices
+* Fixed the AssemblyAI API key translations in several languages

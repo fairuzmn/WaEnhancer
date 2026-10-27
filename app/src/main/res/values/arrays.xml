@@ -1,9 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string-array name="scope">
-        <item>com.whatsapp</item>
-        <item>com.whatsapp.w4b</item>
-        <item>android</item>
+    <string-array name="supported_versions_wpp">
+        <item>2.26.34.xx</item>
+        <item>2.26.35.xx</item>
+        <item>2.26.36.xx</item>
+        <item>2.26.37.xx</item>
+        <item>2.26.38.xx</item>
+        <item>2.26.39.xx</item>
+        <item>2.26.40.xx</item>
+        <item>2.26.41.xx</item>
+    </string-array>
+    <string-array name="supported_versions_business">
+        <item>2.26.34.xx</item>
+        <item>2.26.35.xx</item>
+        <item>2.26.36.xx</item>
+        <item>2.26.37.xx</item>
+        <item>2.26.38.xx</item>
+        <item>2.26.39.xx</item>
+        <item>2.26.40.xx</item>
+        <item>2.26.41.xx</item>
     </string-array>
 
 
@@ -153,22 +168,7 @@
         <item>1</item>
         <item>2</item>
     </string-array>
-    <string-array name="supported_versions_wpp">
-        <item>2.26.14.xx</item>
-        <item>2.26.15.xx</item>
-        <item>2.26.16.xx</item>
-        <item>2.26.17.xx</item>
-        <item>2.26.18.xx</item>
-        <item>2.26.19.xx</item>
-    </string-array>
-    <string-array name="supported_versions_business">
-        <item>2.26.14.xx</item>
-        <item>2.26.15.xx</item>
-        <item>2.26.16.xx</item>
-        <item>2.26.17.xx</item>
-        <item>2.26.18.xx</item>
-        <item>2.26.19.xx</item>
-    </string-array>
+
     <string-array name="image_picker">
         <item>image/*</item>
     </string-array>
@@ -225,5 +225,16 @@
         <item>0</item>
         <item>1</item>
         <item>2</item>
+    </string-array>
+    <string-array name="configui_entries">
+        <item>@string/configui_mode_default</item>
+        <item>@string/configui_mode_toolbar_photo</item>
+        <item>@string/configui_mode_you_tab</item>
+    </string-array>
+
+    <string-array name="configui_values">
+        <item>0</item>
+        <item>2</item>
+        <item>6</item>
     </string-array>
 </resources>

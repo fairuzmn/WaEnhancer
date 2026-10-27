@@ -1,0 +1,306 @@
+package com.wmods.wppenhacer.xposed.features.customization
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.SharedPreferences
+import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.text.TextUtils
+import android.util.LruCache
+import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.RelativeLayout
+import android.widget.TextView
+import androidx.core.text.TextUtilsCompat
+import com.highcapable.kavaref.KavaRef.Companion.resolve
+import com.highcapable.yukihookapi.extension.kavaref.hookAll
+import com.wmods.wppenhacer.R
+import com.wmods.wppenhacer.xposed.core.Feature
+import com.wmods.wppenhacer.xposed.core.components.WaContactWpp
+import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator
+import com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache
+import com.wmods.wppenhacer.xposed.features.listeners.ContactItemListener
+import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
+import com.wmods.wppenhacer.xposed.utils.Utils
+import com.wmods.wppenhacer.xposed.utils.YukiLog
+import java.lang.reflect.Field
+import java.lang.reflect.Method
+import java.util.Locale
+import java.util.concurrent.Executors
+
+class ShowOnline(loader: ClassLoader, preferences: SharedPreferences) :
+    Feature(loader, preferences) {
+
+    private var mStatusUser: Any? = null
+    private var mInstancePresence: Any? = null
+    private var sendPresenceMethod: Method? = null
+    private var tcTokenMethod: Method? = null
+    private var getStatusUser: Method? = null
+    private var fieldTokenDBInstance: Field? = null
+    private var tokenClass: Class<*>? = null
+
+    private data class CachedStatus(val status: String?, val expiresAt: Long)
+
+    private val asyncExecutor = Executors.newFixedThreadPool(2)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val statusCache = LruCache<String, CachedStatus>(128)
+    private val onlineStatusLabel by lazy {
+        UnobfuscatorCache.getInstance().getString("online")
+    }
+
+    override fun doHook() {
+        val showOnlineText = xprefs.getBoolean("showonlinetext", false)
+        val showOnlineIcon = xprefs.getBoolean("dotonline", false)
+        if (!showOnlineText && !showOnlineIcon) return
+
+        val classViewHolder = Unobfuscator.loadViewHolder(classLoader)
+        classViewHolder.resolve().constructor { }.hookAll {
+            after {
+                val view = args.filterIsInstance<View>().first()
+                val context = args.filterIsInstance<Context>().first()
+                var content =
+                    view.findViewById<LinearLayout>(Utils.getID("conversations_row_content", "id"))
+                if (content == null) {
+                    content = view.findViewById(Utils.getID("row_content", "id"))
+                }
+                if (showOnlineText) {
+                    val linearLayout = LinearLayout(context)
+                    linearLayout.gravity = Gravity.END or Gravity.TOP
+                    content.addView(linearLayout)
+
+                    val lastSeenText = TextView(context)
+                    lastSeenText.id = 0x7FFF0002
+                    lastSeenText.textSize = 12f
+                    lastSeenText.text = ""
+                    lastSeenText.layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.MATCH_PARENT
+                    )
+                    lastSeenText.gravity = Gravity.CENTER_VERTICAL
+                    lastSeenText.visibility = View.VISIBLE
+                    linearLayout.addView(lastSeenText)
+                }
+                if (showOnlineIcon) {
+                    val contactView =
+                        view.findViewById<FrameLayout>(Utils.getID("contact_selector", "id"))
+                    val firstChild = contactView.getChildAt(0)
+                    val isLeftToRight =
+                        TextUtilsCompat.getLayoutDirectionFromLocale(Locale.getDefault()) == View.LAYOUT_DIRECTION_LTR
+                    if (firstChild is ImageView) {
+                        contactView.removeView(firstChild)
+
+                        val relativeLayout = RelativeLayout(context)
+                        relativeLayout.id = 0x7FFF0003
+                        val params = RelativeLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                        params.addRule(RelativeLayout.CENTER_IN_PARENT)
+                        firstChild.layoutParams = params
+                        relativeLayout.addView(firstChild)
+                        contactView.addView(relativeLayout)
+
+                        val imageView = ImageView(context)
+                        imageView.id = 0x7FFF0001
+                        val params2 = RelativeLayout.LayoutParams(
+                            Utils.dipToPixels(14), Utils.dipToPixels(14)
+                        )
+                        params2.addRule(RelativeLayout.ALIGN_TOP, contactView.id)
+                        params2.addRule(
+                            if (isLeftToRight) RelativeLayout.ALIGN_RIGHT else RelativeLayout.ALIGN_LEFT,
+                            firstChild.id
+                        )
+                        params2.topMargin = Utils.dipToPixels(5)
+                        imageView.layoutParams = params2
+                        imageView.setImageResource(R.drawable.online)
+                        imageView.adjustViewBounds = true
+                        imageView.scaleType = ImageView.ScaleType.FIT_XY
+                        imageView.visibility = View.INVISIBLE
+                        relativeLayout.addView(imageView)
+                    } else if (firstChild is RelativeLayout) {
+                        val photoView = firstChild.getChildAt(0) as ImageView
+
+                        val params = RelativeLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                        params.addRule(RelativeLayout.CENTER_IN_PARENT)
+                        photoView.layoutParams = params
+
+                        val imageView = ImageView(context)
+                        imageView.id = 0x7FFF0001
+                        val params2 = RelativeLayout.LayoutParams(
+                            Utils.dipToPixels(14), Utils.dipToPixels(14)
+                        )
+                        params2.addRule(RelativeLayout.ALIGN_TOP, contactView.id)
+                        params2.addRule(
+                            if (isLeftToRight) RelativeLayout.ALIGN_RIGHT else RelativeLayout.ALIGN_LEFT,
+                            photoView.id
+                        )
+                        params2.topMargin = Utils.dipToPixels(5)
+                        imageView.layoutParams = params2
+                        imageView.setImageResource(R.drawable.online)
+                        imageView.adjustViewBounds = true
+                        imageView.scaleType = ImageView.ScaleType.FIT_XY
+                        imageView.visibility = View.INVISIBLE
+                        firstChild.addView(imageView)
+                    }
+                }
+            }
+        }
+
+        getStatusUser = Unobfuscator.loadStatusUserMethod(classLoader)
+        sendPresenceMethod = Unobfuscator.loadSendPresenceMethod(classLoader)
+        tcTokenMethod = Unobfuscator.loadTcTokenMethod(classLoader)
+
+        getStatusUser!!.declaringClass.resolve().constructor { }.hookAll {
+            after {
+                mStatusUser = instance
+            }
+        }
+
+        sendPresenceMethod!!.declaringClass.resolve().constructor { }.hookAll {
+            after {
+                mInstancePresence = instance
+            }
+        }
+
+        tokenClass = sendPresenceMethod!!.parameterTypes[2]
+        fieldTokenDBInstance = ReflectionUtils.getFieldByExtendType(
+            sendPresenceMethod!!.declaringClass, tcTokenMethod!!.declaringClass
+        )
+
+        val tokenConstructor = tokenClass?.constructors?.firstOrNull()
+
+        ContactItemListener.contactListeners.add(object :
+            ContactItemListener.OnContactItemListener() {
+            @SuppressLint("ResourceType")
+            override fun onBind(waContact: WaContactWpp?, view: View?) {
+                try {
+                    val contact = waContact ?: return
+                    val targetView = view ?: return
+                    val userJid = contact.userJid
+                    if (userJid.isNull || userJid.isGroup) return
+
+                    val targetJid = userJid.userRawString ?: return
+                    targetView.setTag(ID_CONTACT_JID_TAG, targetJid)
+
+                    val csDot: ImageView? =
+                        if (showOnlineIcon) targetView.findViewById(ID_ONLINE_DOT) else null
+                    if (showOnlineIcon && csDot != null) {
+                        csDot.visibility = View.INVISIBLE
+                    }
+                    val lastSeenText: TextView? =
+                        if (showOnlineText) targetView.findViewById(ID_LAST_SEEN_TEXT) else null
+                    if (lastSeenText != null) {
+                        lastSeenText.text = ""
+                    }
+                    val now = SystemClock.uptimeMillis()
+                    val cachedStatus = statusCache.get(targetJid)
+                    if (cachedStatus != null && cachedStatus.expiresAt > now) {
+                        setStatus(cachedStatus.status, csDot, lastSeenText, onlineStatusLabel)
+                        return
+                    }
+
+                    val presence = mInstancePresence ?: return
+                    val tokenDBField = fieldTokenDBInstance ?: return
+                    val tcMethod = tcTokenMethod ?: return
+                    val statusMethod = getStatusUser ?: return
+                    val sendMethod = sendPresenceMethod ?: return
+
+                    asyncExecutor.execute {
+                        try {
+                            val tokenDBInstance = tokenDBField.get(presence)
+                            val tokenData =
+                                ReflectionUtils.callMethod(tcMethod, tokenDBInstance, userJid.userJid)
+                            val tokenObj = tokenConstructor?.newInstance(
+                                if (tokenData == null) null else ReflectionUtils.getObjectField(
+                                    tokenData,
+                                    "A01"
+                                )
+                            )
+                            sendMethod.invoke(null, userJid.userJid, null, tokenObj, presence)
+                            val status = if (statusMethod.returnType == String::class.java) {
+                                ReflectionUtils.callMethod(
+                                    statusMethod,
+                                    mStatusUser,
+                                    contact.getObject(),
+                                    false
+                                ) as? String
+                            } else {
+                                val result = ReflectionUtils.callMethod(
+                                    statusMethod,
+                                    mStatusUser,
+                                    contact.getObject(),
+                                    Integer.valueOf(0),
+                                    false
+                                )
+                                if (result == null) null
+                                else ReflectionUtils.getObjectField(result, "A01") as? String
+                            }
+                            mainHandler.post {
+                                if (targetView.getTag(ID_CONTACT_JID_TAG) == targetJid) {
+                                    statusCache.put(
+                                        targetJid,
+                                        CachedStatus(
+                                            status,
+                                            SystemClock.uptimeMillis() + STATUS_CACHE_TTL_MS
+                                        )
+                                    )
+                                    setStatus(status, csDot, lastSeenText, onlineStatusLabel)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            YukiLog.log(e)
+                        }
+                    }
+                } catch (e: Exception) {
+                    YukiLog.log(e)
+                }
+            }
+        })
+    }
+
+    override fun getPluginName(): String {
+        return "Conversation"
+    }
+
+    companion object {
+        private const val STATUS_CACHE_TTL_MS = 1000L
+        private const val ID_ONLINE_DOT = 0x7FFF0001
+        private const val ID_LAST_SEEN_TEXT = 0x7FFF0002
+        private const val ID_CONTACT_JID_TAG = 0x7FFF0004
+
+        private fun setStatus(
+            status: String?,
+            csDot: ImageView?,
+            lastSeenText: TextView?,
+            onlineStatus: String
+        ) {
+            if (!TextUtils.isEmpty(status) && status!!.trim { it <= ' ' } == onlineStatus) {
+                if (csDot != null) {
+                    csDot.visibility = View.VISIBLE
+                }
+            }
+
+            if (lastSeenText != null) {
+                if (!TextUtils.isEmpty(status)) {
+                    lastSeenText.text = status
+                    if (onlineStatus == status) {
+                        lastSeenText.setTextColor(Color.GREEN)
+                    } else {
+                        lastSeenText.setTextColor(0xffcac100.toInt())
+                    }
+                } else {
+                    lastSeenText.text = ""
+                    lastSeenText.setTextColor(Color.GRAY)
+                }
+            }
+        }
+    }
+}
